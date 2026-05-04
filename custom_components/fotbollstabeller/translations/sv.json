@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Fotbollstabeller",
+        "description": "Ange URL till en grupp på fotbollstabeller.nu, t.ex. fotbollstabeller.nu/home/group/u17-allsvenskan-sodra eller bara slug:en u17-allsvenskan-sodra.",
+        "data": {
+          "group_url": "Grupp-URL eller slug"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Kunde inte ansluta till fotbollstabeller.nu. Kontrollera URL:en.",
+      "no_standings": "Ingen tabell hittades på sidan. Kontrollera att URL:en pekar på en grupp."
+    },
+    "abort": {
+      "already_configured": "Denna grupp är redan konfigurerad."
+    }
+  }
+}
