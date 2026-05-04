@@ -5,29 +5,25 @@ import logging
 import pathlib
 import time
 
-import aiohttp
 import voluptuous as vol
 
 from homeassistant.components import websocket_api
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import homeassistant.helpers.config_validation as cv
 
-from .const import DOMAIN, CONF_GROUP_URL, BASE_URL, KNOWN_LEAGUES
-from .coordinator import FotbollstabellerCoordinator, fetch_standings, _HEADERS
+from .const import DOMAIN, BASE_URL, KNOWN_LEAGUES
+from .coordinator import fetch_standings
 
 _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-PLATFORMS: list[Platform] = [Platform.SENSOR]
-
 _CARD_URL = f"/{DOMAIN}/fotbollstabeller-card.js"
 _TEAM_CARD_URL = f"/{DOMAIN}/fotbollstabeller-team-card.js"
-_CARD_VERSION = "6"  # bump this to bust browser cache after updates
+_CARD_VERSION = "7"  # bump this to bust browser cache after updates
 
 _WS_CACHE_TTL = 300  # 5 minutes
 
@@ -120,21 +116,10 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Fotbollstabeller from a config entry."""
-    group_url = entry.data.get(CONF_GROUP_URL, "")
-    coordinator = FotbollstabellerCoordinator(hass, group_url)
-    try:
-        await coordinator.async_config_entry_first_refresh()
-    except Exception:  # noqa: BLE001
-        _LOGGER.warning("Fotbollstabeller: initial fetch failed, will retry on schedule.")
-
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    hass.data.setdefault(DOMAIN, {})
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
-    return unload_ok
+    return True

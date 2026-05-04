@@ -136,6 +136,7 @@ class FotbollstabellerCard extends HTMLElement {
       this._wsData = null;
       this._lastFetch = 0;
     }
+    this._updateStyles();
     if (this._initialized && this._hass) {
       this.hass = this._hass;
     }
@@ -210,10 +211,24 @@ class FotbollstabellerCard extends HTMLElement {
   _init() {
     this._initialized = true;
     var shadow = this.attachShadow({ mode: "open" });
-    var style = document.createElement("style");
-    style.textContent = [
+    this._styleEl = document.createElement("style");
+    var card = document.createElement("ha-card");
+    this._content = document.createElement("div");
+    card.appendChild(this._content);
+    shadow.appendChild(this._styleEl);
+    shadow.appendChild(card);
+    this._updateStyles();
+  }
+
+  _updateStyles() {
+    if (!this._styleEl) return;
+    var cfg = this.config || {};
+    var hc = cfg.header_color || "#1a6b3a";
+    var htc = cfg.header_text_color || "#ffffff";
+    var ac = cfg.accent_color || hc;
+    this._styleEl.textContent = [
       "ha-card{padding:0;overflow:hidden}",
-      ".header{background:linear-gradient(135deg,#1a6b3a,#0d4a28);color:#fff;padding:14px 16px;font-size:1.1em;font-weight:700}",
+      ".header{background-color:" + hc + ";background-image:linear-gradient(135deg,rgba(255,255,255,0.08),rgba(0,0,0,0.15));color:" + htc + ";padding:14px 16px;font-size:1.1em;font-weight:700}",
       "table{width:100%;border-collapse:collapse;font-size:0.88em}",
       "thead tr{background:#f4f4f4;color:#555;font-size:0.78em;text-transform:uppercase}",
       "th{padding:6px 8px;text-align:center;white-space:nowrap}",
@@ -227,15 +242,10 @@ class FotbollstabellerCard extends HTMLElement {
       "td.tc img{width:22px;height:22px;object-fit:contain;flex-shrink:0}",
       "td.tc span{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}",
       "td.pos{font-weight:700;color:#333;width:28px}",
-      "td.pts{font-weight:800;color:#1a6b3a}",
+      "td.pts{font-weight:800;color:" + ac + "}",
       "td.gd.p{color:#2e7d32}",
       "td.gd.n{color:#c62828}",
     ].join("");
-    var card = document.createElement("ha-card");
-    this._content = document.createElement("div");
-    card.appendChild(this._content);
-    shadow.appendChild(style);
-    shadow.appendChild(card);
   }
 
   _render(standings, groupName) {
@@ -340,6 +350,7 @@ class FotbollstabellerCardEditor extends HTMLElement {
       + 'label{min-width:120px;font-weight:500}'
       + 'input[type=text]{flex:1;padding:6px 8px;border:1px solid #ccc;border-radius:4px}'
       + 'input[type=number]{width:80px;padding:6px 8px;border:1px solid #ccc;border-radius:4px}'
+      + 'input[type=color]{width:40px;height:34px;padding:2px;border:1px solid #ccc;border-radius:4px;cursor:pointer}'
       + 'select{flex:1;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:0.9em}'
       + '.sep{text-align:center;color:#999;font-size:0.82em;margin:8px 0}'
       + '.col-section{margin-top:12px}'
@@ -386,6 +397,12 @@ class FotbollstabellerCardEditor extends HTMLElement {
       + '<input type="text" id="fav" value="' + (cfg.favorite_team || "") + '"></div>';
     html += '<div class="row"><label>Max rader</label>'
       + '<input type="number" id="maxrows" min="0" value="' + (cfg.max_rows || "") + '" placeholder="alla"></div>';
+
+    // ── Color options ──
+    html += '<div class="sep">\u2014 f\u00e4rger \u2014</div>';
+    html += '<div class="row"><label>Rubrikf\u00e4rg</label><input type="color" id="header_color" value="' + (cfg.header_color || '#1a6b3a') + '"></div>';
+    html += '<div class="row"><label>Rubriktext</label><input type="color" id="header_text_color" value="' + (cfg.header_text_color || '#ffffff') + '"></div>';
+    html += '<div class="row"><label>Accentf\u00e4rg</label><input type="color" id="accent_color" value="' + (cfg.accent_color || '#1a6b3a') + '"></div>';
 
     html += '<div class="col-section"><h3>Kolumner (klicka f\u00f6r att v\u00e4xla)</h3><div class="col-grid">';
     for (var ci = 0; ci < FOTBOLLSTABELLER_COLUMNS.length; ci++) {
@@ -457,6 +474,18 @@ class FotbollstabellerCardEditor extends HTMLElement {
     this.shadowRoot.getElementById("maxrows").addEventListener("change", function (e) {
       var v = parseInt(e.target.value, 10);
       self._update("max_rows", v > 0 ? v : undefined);
+    });
+    this.shadowRoot.getElementById("header_color").addEventListener("input", function (e) {
+      self._config.header_color = e.target.value;
+      self._fireChanged();
+    });
+    this.shadowRoot.getElementById("header_text_color").addEventListener("input", function (e) {
+      self._config.header_text_color = e.target.value;
+      self._fireChanged();
+    });
+    this.shadowRoot.getElementById("accent_color").addEventListener("input", function (e) {
+      self._config.accent_color = e.target.value;
+      self._fireChanged();
     });
     var chips = this.shadowRoot.querySelectorAll(".col-chip");
     for (var cj = 0; cj < chips.length; cj++) {

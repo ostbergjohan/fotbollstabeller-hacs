@@ -1,35 +1,32 @@
 # Fotbollstabeller – Home Assistant Integration
 
-![version](https://img.shields.io/badge/version-2.0.0-blue) ![hacs](https://img.shields.io/badge/HACS-Custom-orange)
+![version](https://img.shields.io/badge/version-3.0.0-blue) ![hacs](https://img.shields.io/badge/HACS-Custom-orange)
 
-Home Assistant integration som visar tabell och lagstatistik från **fotbollstabeller.nu** direkt i din dashboard. Fungerar med alla grupper/serier – P17 Allsvenskan, division 1, osv. Ingen API-nyckel krävs.
+Home Assistant-integration som visar fotbollstabeller från **fotbollstabeller.nu** direkt i din dashboard. Stödjer alla serier – Allsvenskan, Superettan, Division 1–3, P17/P19/F17/F19, med mera. Ingen API-nyckel krävs.
 
 ---
 
 ## Funktioner
 
-- 📋 Inbyggt **Lovelace-kort** med tabell och konfiguerbara kolumner
-- 🏟️ **Hero-kort per lag** med manuell bild-URL, poäng, målstatistik m.m.
-- 📡 Sensor med **fullständig tabell** som attribut
-- ⚽ En sensor **per lag** med aktuell position och detaljstatistik
-- 🔄 Uppdateras automatiskt varje **60:e minut**
+- 📋 **Tabellkort** med konfiguerbara kolumner och färger
+- 🏟️ **Lagkort** (hero-stil) med poäng, målstatistik och valfri klubbild
+- 🎨 **Anpassningsbara färger** – rubrik, text och accent direkt i kortets editor
+- ⚡ **Zero-config** – installera integrationen, välj serie direkt i kortet
+- 🔄 Data hämtas via WebSocket med 5 min cache
 - 🔑 Ingen API-nyckel krävs
 
 ---
 
-## Installation via HACS
+## Installation
 
 1. Gå till **HACS → Integrations → ⋮ → Custom repositories**
 2. Lägg till `https://github.com/ostbergjohan/fotbollstabeller-hacs` som **Integration**
 3. Sök efter **Fotbollstabeller** och klicka **Download**
 4. **Starta om Home Assistant**
 5. Gå till **Settings → Devices & Services → Add Integration → Fotbollstabeller**
-6. Ange URL till en grupp på fotbollstabeller.nu, t.ex.:
-   - `u17-allsvenskan-sodra`
-   - `fotbollstabeller.nu/home/group/u17-allsvenskan-sodra`
-   - `https://www.fotbollstabeller.nu/home/group/u17-allsvenskan-sodra`
+6. Klicka **Skicka** – klart! Ingen konfiguration behövs.
 
-Du kan lägga till **flera grupper** genom att upprepa steg 5–6.
+Serier väljs sedan direkt i korten.
 
 ---
 
@@ -37,28 +34,54 @@ Du kan lägga till **flera grupper** genom att upprepa steg 5–6.
 
 ### Tabellkort
 
-Lägg till via **Edit Dashboard → Add Card → Custom: Fotbollstabeller**, eller manuellt:
+Lägg till via **Edit Dashboard → Add Card → Custom: Fotbollstabeller**.
+
+Editorn låter dig:
+- Välja serie från en lista eller ange en egen URL/slug
+- Ställa in favoritlag (markeras i gult)
+- Begränsa antal rader
+- Välja vilka kolumner som visas
+- Anpassa färger (rubrik, rubriktext, accent)
+
+YAML-exempel:
 
 ```yaml
 type: custom:fotbollstabeller-card
-entity: sensor.p17_allsvenskan_sodra_2026_tabell   # välj din tabellsensor
-max_rows: 10                                        # valfritt, standard visar alla lag
-favorite_team: Hammarby                              # valfritt, markerar raden i gult
+group_url: allsvenskan-herrar
+favorite_team: Hammarby
+max_rows: 10
+header_color: "#1a6b3a"
+header_text_color: "#ffffff"
+accent_color: "#1a6b3a"
+columns:
+  - position
+  - team
+  - played
+  - won
+  - draw
+  - lost
+  - goals
+  - goal_difference
+  - points
 ```
 
 ### Lagkort
 
-Hero-kort för ett enskilt lag. Eftersom fotbollstabeller.nu inte har laglogotyper kan du ange en bild-URL manuellt:
+Hero-kort för ett enskilt lag:
 
 ```yaml
 type: custom:fotbollstabeller-team-card
-entity: sensor.p17_allsvenskan_sodra_2026_bk_hacken
-image: https://example.com/bk-hacken-logo.png   # valfri bild-URL
-subtitle: P17 Allsvenskan Södra                   # valfri undertext
-rows: 4                                            # 1-4, mer detalj med högre nummer
+group_url: allsvenskan-herrar
+team: Hammarby
+image: https://example.com/hammarby-logo.png
+subtitle: Allsvenskan 2026
+rows: 4
+header_color: "#00543e"
+accent_color: "#7dff7d"
 ```
 
 **rows-nivåer:**
+
 | Nivå | Innehåll |
 |------|----------|
 | 1 | Namn + position |
@@ -68,51 +91,35 @@ rows: 4                                            # 1-4, mer detalj med högre 
 
 ---
 
-## Sensorer
+## Färginställningar
 
-### Tabellsensor
+Båda korten stödjer färgval via den visuella editorn eller YAML:
 
-Entity-namn genereras från gruppnamnet, t.ex. `sensor.p17_allsvenskan_sodra_2026_tabell`.
+| Inställning | Tabellkort | Lagkort | Standard |
+|---|---|---|---|
+| `header_color` | Header-bakgrund | Hero + poängbar | `#1a6b3a` |
+| `header_text_color` | Header-textfärg | — | `#ffffff` |
+| `accent_color` | Poängkolumn | Poängtext | `#1a6b3a` / `#7dff7d` |
 
-| | |
-|---|---|
-| **State** | Namn på serieledaren |
-| **Attribut** | `group_name`, `standings` |
+---
 
-`standings` är en lista med ett objekt per lag:
+## Tillgängliga serier
 
-```json
-{
-  "position": 1,
-  "team": "BK Häcken",
-  "team_short": "BK Häcken",
-  "team_logo": null,
-  "played_games": 5,
-  "won": 3,
-  "draw": 2,
-  "lost": 0,
-  "goals_for": 19,
-  "goals_against": 7,
-  "goal_difference": 12,
-  "points": 11
-}
-```
+Dropdown i editorn innehåller bl.a.:
 
-### Lagsensor
+- Allsvenskan & Superettan (herrar/damer)
+- Elitettan (damer)
+- Ettan Norra/Södra
+- Division 1–3 (herrar/damer)
+- P17/P19/F17/F19 Allsvenskan & Superettan
 
-En sensor per lag, t.ex. `sensor.p17_allsvenskan_sodra_2026_bk_hacken`.
-
-| | |
-|---|---|
-| **State** | Tabellposition (heltal) |
-| **Enhet** | `pos` |
-| **Attribut** | `team`, `points`, `played`, `won`, `draw`, `lost`, `goals_for`, `goals_against`, `goal_difference`, `crest` |
+Du kan även ange **vilken grupp-URL som helst** från fotbollstabeller.nu via "Egen URL".
 
 ---
 
 ## Datakälla
 
-Data hämtas genom att scrapa gruppsidan på [fotbollstabeller.nu](https://www.fotbollstabeller.nu/). Ingen API-nyckel krävs. Uppdateras var 60:e minut.
+Data hämtas genom att scrapa gruppsidan på [fotbollstabeller.nu](https://www.fotbollstabeller.nu/). Ingen API-nyckel krävs. Kortet hämtar data via WebSocket med 5 minuters cache.
 
 ---
 

@@ -15,51 +15,55 @@
  * ═══════════════════════════════════════════════════════════════════ */
 
 /* ── Styles ────────────────────────────────────────────────────── */
-var TEAM_CARD_STYLES = [
-  ":host{display:block}",
-  "ha-card{padding:0;overflow:hidden;border-radius:16px;background:var(--ha-card-background,var(--card-background-color,#2a2a2a));color:var(--primary-text-color,#fff)}",
+function _buildTeamCardStyles(cfg) {
+  var hc = (cfg && cfg.header_color) || "#1a6b3a";
+  var ac = (cfg && cfg.accent_color) || "#7dff7d";
+  return [
+    ":host{display:block}",
+    "ha-card{padding:0;overflow:hidden;border-radius:16px;background:var(--ha-card-background,var(--card-background-color,#2a2a2a));color:var(--primary-text-color,#fff)}",
 
-  /* Hero */
-  ".hero{background:linear-gradient(135deg,#1a6b3a 0%,#0d4a28 100%);padding:28px 24px 22px;display:flex;align-items:center;gap:18px;position:relative;overflow:hidden}",
-  ".hero::after{content:'';position:absolute;right:-30px;top:-30px;width:140px;height:140px;background:rgba(255,255,255,0.04);border-radius:50%}",
-  ".hero img{width:72px;height:72px;object-fit:contain;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.3));flex-shrink:0}",
-  ".hero .no-img{width:72px;height:72px;display:flex;align-items:center;justify-content:center;font-size:2em;background:rgba(255,255,255,0.1);border-radius:12px;flex-shrink:0}",
-  ".hero-text{flex:1;min-width:0}",
-  ".hero-text .team-name{font-size:1.3em;font-weight:700;line-height:1.2;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,0.3)}",
-  ".hero-text .subtitle{font-size:0.82em;color:rgba(255,255,255,0.7);margin-top:4px}",
-  ".position-badge{position:absolute;top:14px;right:16px;background:rgba(255,255,255,0.15);backdrop-filter:blur(4px);border-radius:10px;padding:4px 12px;font-size:0.75em;font-weight:600;letter-spacing:0.5px;color:rgba(255,255,255,0.9)}",
-  ".position-badge span{font-size:1.4em;font-weight:800;color:#fff}",
+    /* Hero */
+    ".hero{background-color:" + hc + ";background-image:linear-gradient(135deg,rgba(255,255,255,0.08),rgba(0,0,0,0.15));padding:28px 24px 22px;display:flex;align-items:center;gap:18px;position:relative;overflow:hidden}",
+    ".hero::after{content:'';position:absolute;right:-30px;top:-30px;width:140px;height:140px;background:rgba(255,255,255,0.04);border-radius:50%}",
+    ".hero img{width:72px;height:72px;object-fit:contain;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.3));flex-shrink:0}",
+    ".hero .no-img{width:72px;height:72px;display:flex;align-items:center;justify-content:center;font-size:2em;background:rgba(255,255,255,0.1);border-radius:12px;flex-shrink:0}",
+    ".hero-text{flex:1;min-width:0}",
+    ".hero-text .team-name{font-size:1.3em;font-weight:700;line-height:1.2;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,0.3)}",
+    ".hero-text .subtitle{font-size:0.82em;color:rgba(255,255,255,0.7);margin-top:4px}",
+    ".position-badge{position:absolute;top:14px;right:16px;background:rgba(255,255,255,0.15);backdrop-filter:blur(4px);border-radius:10px;padding:4px 12px;font-size:0.75em;font-weight:600;letter-spacing:0.5px;color:rgba(255,255,255,0.9)}",
+    ".position-badge span{font-size:1.4em;font-weight:800;color:#fff}",
 
-  /* Points bar */
-  ".points-bar{display:flex;align-items:center;justify-content:center;gap:6px;padding:12px;background:linear-gradient(90deg,#145a30,#1a6b3a);font-size:0.85em;color:rgba(255,255,255,0.75)}",
-  ".points-bar .pts{font-size:1.6em;font-weight:800;color:#7dff7d}",
+    /* Points bar */
+    ".points-bar{display:flex;align-items:center;justify-content:center;gap:6px;padding:12px;background-color:" + hc + ";background-image:linear-gradient(90deg,rgba(255,255,255,0.05),rgba(0,0,0,0.1));font-size:0.85em;color:rgba(255,255,255,0.75)}",
+    ".points-bar .pts{font-size:1.6em;font-weight:800;color:" + ac + "}",
 
-  /* Stats grid */
-  ".stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#333;padding:1px}",
-  ".stat{background:var(--ha-card-background,var(--card-background-color,#2a2a2a));text-align:center;padding:14px 8px}",
-  ".stat .val{font-size:1.4em;font-weight:700}",
-  ".stat .lbl{font-size:0.72em;color:var(--secondary-text-color,#999);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px}",
-  ".stat.won .val{color:#66bb6a}",
-  ".stat.draw .val{color:#ffa726}",
-  ".stat.lost .val{color:#ef5350}",
+    /* Stats grid */
+    ".stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#333;padding:1px}",
+    ".stat{background:var(--ha-card-background,var(--card-background-color,#2a2a2a));text-align:center;padding:14px 8px}",
+    ".stat .val{font-size:1.4em;font-weight:700}",
+    ".stat .lbl{font-size:0.72em;color:var(--secondary-text-color,#999);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px}",
+    ".stat.won .val{color:#66bb6a}",
+    ".stat.draw .val{color:#ffa726}",
+    ".stat.lost .val{color:#ef5350}",
 
-  /* Goals section */
-  ".goals{display:flex;align-items:center;justify-content:center;gap:16px;padding:16px;border-top:1px solid rgba(255,255,255,0.08)}",
-  ".goals .g-block{text-align:center}",
-  ".goals .g-block .val{font-size:1.3em;font-weight:700}",
-  ".goals .g-block .lbl{font-size:0.7em;color:var(--secondary-text-color,#999);text-transform:uppercase;margin-top:2px}",
-  ".goals .divider{font-size:1.2em;color:var(--secondary-text-color,#555)}",
-  ".goals .gd{background:rgba(102,187,106,0.15);border-radius:8px;padding:6px 14px;text-align:center}",
-  ".goals .gd .val.pos{color:#66bb6a}",
-  ".goals .gd .val.neg{color:#ef5350}",
-  ".goals .gd .val.zero{color:var(--secondary-text-color,#999)}",
+    /* Goals section */
+    ".goals{display:flex;align-items:center;justify-content:center;gap:16px;padding:16px;border-top:1px solid rgba(255,255,255,0.08)}",
+    ".goals .g-block{text-align:center}",
+    ".goals .g-block .val{font-size:1.3em;font-weight:700}",
+    ".goals .g-block .lbl{font-size:0.7em;color:var(--secondary-text-color,#999);text-transform:uppercase;margin-top:2px}",
+    ".goals .divider{font-size:1.2em;color:var(--secondary-text-color,#555)}",
+    ".goals .gd{background:rgba(102,187,106,0.15);border-radius:8px;padding:6px 14px;text-align:center}",
+    ".goals .gd .val.pos{color:#66bb6a}",
+    ".goals .gd .val.neg{color:#ef5350}",
+    ".goals .gd .val.zero{color:var(--secondary-text-color,#999)}",
 
-  /* Form bar */
-  ".form-bar{display:flex;height:5px}",
-  ".form-bar .w{background:#66bb6a}",
-  ".form-bar .d{background:#ffa726}",
-  ".form-bar .l{background:#ef5350}",
-].join("");
+    /* Form bar */
+    ".form-bar{display:flex;height:5px}",
+    ".form-bar .w{background:#66bb6a}",
+    ".form-bar .d{background:#ffa726}",
+    ".form-bar .l{background:#ef5350}",
+  ].join("");
+}
 
 
 /* ── Position suffix helper ────────────────────────────────────── */
@@ -90,6 +94,7 @@ class FotbollstabellerTeamCard extends HTMLElement {
       this._wsData = null;
       this._lastFetch = 0;
     }
+    this._updateStyles();
     if (this._initialized && this._hass) {
       this.hass = this._hass;
     }
@@ -187,13 +192,18 @@ class FotbollstabellerTeamCard extends HTMLElement {
   _init() {
     this._initialized = true;
     var shadow = this.attachShadow({ mode: "open" });
-    var style = document.createElement("style");
-    style.textContent = TEAM_CARD_STYLES;
+    this._styleEl = document.createElement("style");
     var card = document.createElement("ha-card");
     this._content = document.createElement("div");
     card.appendChild(this._content);
-    shadow.appendChild(style);
+    shadow.appendChild(this._styleEl);
     shadow.appendChild(card);
+    this._updateStyles();
+  }
+
+  _updateStyles() {
+    if (!this._styleEl) return;
+    this._styleEl.textContent = _buildTeamCardStyles(this.config);
   }
 
   _renderCard(stateObj) {
@@ -384,6 +394,7 @@ class FotbollstabellerTeamCardEditor extends HTMLElement {
         "label{min-width:90px;font-weight:500}" +
         "select{flex:1;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:0.9em}" +
         "input[type=text]{flex:1;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:0.9em}" +
+        "input[type=color]{width:40px;height:34px;padding:2px;border:1px solid #ccc;border-radius:4px;cursor:pointer}" +
         ".sep{text-align:center;color:#999;font-size:0.82em;margin:8px 0}" +
         ".desc{font-size:0.78em;color:#888;margin:-4px 0 8px 98px}" +
       "</style>";
@@ -453,6 +464,11 @@ class FotbollstabellerTeamCardEditor extends HTMLElement {
       html += '<option value="' + r + '"' + selR + '>' + rowLabels[r - 1] + '</option>';
     }
     html += '</select></div>';
+
+    // ── Color options ──
+    html += '<div class="sep">\u2014 f\u00e4rger \u2014</div>';
+    html += '<div class="row"><label>Rubrikf\u00e4rg</label><input type="color" id="header_color" value="' + (cfg.header_color || '#1a6b3a') + '"></div>';
+    html += '<div class="row"><label>Accentf\u00e4rg</label><input type="color" id="accent_color" value="' + (cfg.accent_color || '#7dff7d') + '"></div>';
 
     this.shadowRoot.innerHTML = html;
 
@@ -540,6 +556,14 @@ class FotbollstabellerTeamCardEditor extends HTMLElement {
     });
     this.shadowRoot.getElementById("rows").addEventListener("change", function (e) {
       self._update("rows", parseInt(e.target.value, 10));
+    });
+    this.shadowRoot.getElementById("header_color").addEventListener("input", function (e) {
+      self._config.header_color = e.target.value;
+      self._fireChanged();
+    });
+    this.shadowRoot.getElementById("accent_color").addEventListener("input", function (e) {
+      self._config.accent_color = e.target.value;
+      self._fireChanged();
     });
   }
 

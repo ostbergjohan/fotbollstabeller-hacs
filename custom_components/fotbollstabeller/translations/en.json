@@ -3,18 +3,11 @@
     "step": {
       "user": {
         "title": "Fotbollstabeller",
-        "description": "Enter the URL to a group on fotbollstabeller.nu, e.g. fotbollstabeller.nu/home/group/u17-allsvenskan-sodra or just the slug u17-allsvenskan-sodra.",
-        "data": {
-          "group_url": "Group URL or slug"
-        }
+        "description": "Installs the Fotbollstabeller integration. Leagues are selected directly in the cards."
       }
     },
-    "error": {
-      "cannot_connect": "Could not connect to fotbollstabeller.nu. Check the URL.",
-      "no_standings": "No standings table found on the page. Verify the URL points to a group."
-    },
     "abort": {
-      "already_configured": "This group is already configured."
+      "already_configured": "Fotbollstabeller is already installed."
     }
   }
 }
