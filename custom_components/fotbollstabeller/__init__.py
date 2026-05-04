@@ -12,11 +12,14 @@ from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+import homeassistant.helpers.config_validation as cv
 
 from .const import DOMAIN, BASE_URL, KNOWN_LEAGUES
 from .coordinator import fetch_standings
 
 _LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 _CARD_URL = f"/{DOMAIN}/fotbollstabeller-card.js"
 _TEAM_CARD_URL = f"/{DOMAIN}/fotbollstabeller-team-card.js"
@@ -74,7 +77,7 @@ async def ws_get_leagues(
 # ─── Frontend helpers ──────────────────────────────────────────────
 
 
-def _register_cards(hass: HomeAssistant) -> None:
+async def _register_cards(hass: HomeAssistant) -> None:
     """Register static paths and frontend JS resources."""
     www_dir = pathlib.Path(__file__).parent / "www"
     js_path = str(www_dir / "fotbollstabeller-card.js")
@@ -83,13 +86,11 @@ def _register_cards(hass: HomeAssistant) -> None:
     # Register static paths
     try:
         from homeassistant.components.http import StaticPathConfig
-        hass.async_create_task(
-            hass.http.async_register_static_paths(
-                [
-                    StaticPathConfig(_CARD_URL, js_path, False),
-                    StaticPathConfig(_TEAM_CARD_URL, team_js_path, False),
-                ]
-            )
+        await hass.http.async_register_static_paths(
+            [
+                StaticPathConfig(_CARD_URL, js_path, False),
+                StaticPathConfig(_TEAM_CARD_URL, team_js_path, False),
+            ]
         )
     except (ImportError, AttributeError):
         try:
@@ -121,7 +122,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     websocket_api.async_register_command(hass, ws_get_leagues)
 
     # Register cards early
-    _register_cards(hass)
+    await _register_cards(hass)
     hass.data[DOMAIN]["_cards_done"] = True
     return True
 
@@ -139,7 +140,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             websocket_api.async_register_command(hass, ws_get_leagues)
         except Exception:  # noqa: BLE001
             pass
-        _register_cards(hass)
+        await _register_cards(hass)
         hass.data[DOMAIN]["_cards_done"] = True
 
     return True
