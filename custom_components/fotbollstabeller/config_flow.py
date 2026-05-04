@@ -4,15 +4,23 @@ from __future__ import annotations
 import logging
 import re
 
-import aiohttp
 import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import DOMAIN, CONF_GROUP_URL, BASE_URL
+from .coordinator import fetch_standings
 
 _LOGGER = logging.getLogger(__name__)
+
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,*/*",
+}
 
 
 def _normalize_url(raw: str) -> tuple[str, str]:
@@ -51,27 +59,13 @@ class FotbollstabellerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(f"{DOMAIN}_{slug}")
             self._abort_if_unique_id_configured()
 
-            # Validate the URL
+            # Validate by doing the real two-step fetch (group page + AJAX)
             session = async_get_clientsession(self.hass)
             group_name = slug
             try:
-                async with session.get(
-                    url,
-                    headers={"User-Agent": "Mozilla/5.0"},
-                    timeout=aiohttp.ClientTimeout(total=15),
-                ) as resp:
-                    if resp.status != 200:
-                        errors["base"] = "cannot_connect"
-                    else:
-                        html = await resp.text()
-                        if "<th" not in html.lower():
-                            errors["base"] = "no_standings"
-                        else:
-                            m = re.search(
-                                r"<h1[^>]*>(.*?)</h1>", html, re.DOTALL | re.IGNORECASE
-                            )
-                            if m:
-                                group_name = re.sub(r"<[^>]+>", "", m.group(1)).strip()
+                group_name, standings = await fetch_standings(session, url)
+                if not standings:
+                    errors["base"] = "no_standings"
             except Exception as err:  # noqa: BLE001
                 _LOGGER.error("Validation fetch failed: %s", err)
                 errors["base"] = "cannot_connect"
