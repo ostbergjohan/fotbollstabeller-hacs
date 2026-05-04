@@ -12,18 +12,15 @@ from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-import homeassistant.helpers.config_validation as cv
 
 from .const import DOMAIN, BASE_URL, KNOWN_LEAGUES
 from .coordinator import fetch_standings
 
 _LOGGER = logging.getLogger(__name__)
 
-CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
-
 _CARD_URL = f"/{DOMAIN}/fotbollstabeller-card.js"
 _TEAM_CARD_URL = f"/{DOMAIN}/fotbollstabeller-team-card.js"
-_CARD_VERSION = "9"
+_CARD_VERSION = "11"
 
 _WS_CACHE_TTL = 300  # 5 minutes
 
@@ -74,30 +71,25 @@ async def ws_get_leagues(
     connection.send_result(msg["id"], KNOWN_LEAGUES)
 
 
-# ─── Setup ─────────────────────────────────────────────────────────
+# ─── Frontend helpers ──────────────────────────────────────────────
 
 
-async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Register static paths and frontend JS resources early."""
-    hass.data.setdefault(DOMAIN, {})
-
-    # Register websocket commands early so they're available immediately
-    websocket_api.async_register_command(hass, ws_get_standings)
-    websocket_api.async_register_command(hass, ws_get_leagues)
-    _LOGGER.warning("Fotbollstabeller: WS commands registered in async_setup")
-
-    # Register static paths for JS files
+def _register_cards(hass: HomeAssistant) -> None:
+    """Register static paths and frontend JS resources."""
     www_dir = pathlib.Path(__file__).parent / "www"
     js_path = str(www_dir / "fotbollstabeller-card.js")
     team_js_path = str(www_dir / "fotbollstabeller-team-card.js")
 
+    # Register static paths
     try:
         from homeassistant.components.http import StaticPathConfig
-        await hass.http.async_register_static_paths(
-            [
-                StaticPathConfig(_CARD_URL, js_path, False),
-                StaticPathConfig(_TEAM_CARD_URL, team_js_path, False),
-            ]
+        hass.async_create_task(
+            hass.http.async_register_static_paths(
+                [
+                    StaticPathConfig(_CARD_URL, js_path, False),
+                    StaticPathConfig(_TEAM_CARD_URL, team_js_path, False),
+                ]
+            )
         )
     except (ImportError, AttributeError):
         try:
@@ -108,18 +100,48 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     except Exception:  # noqa: BLE001
         pass
 
-    # Register JS as frontend resources – MUST happen in async_setup to be early enough
+    # Register JS resources with frontend
     for card_url in (_CARD_URL, _TEAM_CARD_URL):
         url = f"{card_url}?v={_CARD_VERSION}"
         add_extra_js_url(hass, url)
 
-    _LOGGER.warning("Fotbollstabeller: frontend resources registered")
+    _LOGGER.warning("Fotbollstabeller: cards registered (v%s)", _CARD_VERSION)
+
+
+# ─── Setup ─────────────────────────────────────────────────────────
+
+
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Set up fotbollstabeller (called early if possible)."""
+    _LOGGER.warning("Fotbollstabeller: async_setup called")
+    hass.data.setdefault(DOMAIN, {})
+
+    # Register WS commands
+    websocket_api.async_register_command(hass, ws_get_standings)
+    websocket_api.async_register_command(hass, ws_get_leagues)
+
+    # Register cards early
+    _register_cards(hass)
+    hass.data[DOMAIN]["_cards_done"] = True
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Fotbollstabeller from a config entry."""
+    _LOGGER.warning("Fotbollstabeller: async_setup_entry called")
     hass.data.setdefault(DOMAIN, {})
+
+    # Fallback: if async_setup was not called, register everything here
+    if not hass.data[DOMAIN].get("_cards_done"):
+        _LOGGER.warning("Fotbollstabeller: async_setup was skipped, registering in entry")
+        try:
+            websocket_api.async_register_command(hass, ws_get_standings)
+            websocket_api.async_register_command(hass, ws_get_leagues)
+        except Exception:  # noqa: BLE001
+            pass
+        _register_cards(hass)
+        hass.data[DOMAIN]["_cards_done"] = True
+
     return True
 
 

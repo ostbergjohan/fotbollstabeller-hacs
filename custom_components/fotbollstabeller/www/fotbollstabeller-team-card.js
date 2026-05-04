@@ -2,16 +2,12 @@
  *  Fotbollstabeller Team Card
  *  A hero-style card for a single team.
  *
- *  Config (WS mode – preferred, no sensor setup needed):
+ *  Config:
  *    group_url    – slug or URL to a fotbollstabeller.nu group
  *    team         – exact team name from the standings
  *    image        – URL to a team logo/image (optional)
  *    subtitle     – custom subtitle text (optional)
  *    rows         – 1 | 2 | 3 | 4 (default: 4)
- *
- *  Config (Entity mode – legacy, needs integration config entry):
- *    entity       – sensor.<group>_<team>
- *    image / subtitle / rows – same as above
  * ═══════════════════════════════════════════════════════════════════ */
 
 /* ── Styles ────────────────────────────────────────────────────── */
@@ -85,11 +81,9 @@ class FotbollstabellerTeamCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config.entity && !config.group_url) {
-      throw new Error("V\u00e4lj en serie och ett lag i kortets inst\u00e4llningar.");
-    }
-    var urlChanged = !this.config || config.group_url !== this.config.group_url;
     this.config = config;
+    var urlChanged = !this._prevUrl || config.group_url !== this._prevUrl;
+    this._prevUrl = config.group_url;
     if (urlChanged) {
       this._wsData = null;
       this._lastFetch = 0;
@@ -131,19 +125,8 @@ class FotbollstabellerTeamCard extends HTMLElement {
       return;
     }
 
-    // ── Entity mode ──
-    var entity = this.config && this.config.entity;
-    if (!entity) {
-      this._content.innerHTML = '<p style="padding:12px;color:#999">V\u00e4lj serie och lag.</p>';
-      return;
-    }
-    var stateObj = hass.states[entity];
-    if (!stateObj) {
-      this._content.innerHTML =
-        '<p style="color:red;padding:12px">Entity <b>' + entity + "</b> not found.</p>";
-      return;
-    }
-    this._renderCard(stateObj);
+    // No group_url + team configured
+    this._content.innerHTML = '<p style="padding:12px;color:#999">V\u00e4lj serie och lag.</p>';
   }
 
   _fetchWS() {
@@ -204,25 +187,6 @@ class FotbollstabellerTeamCard extends HTMLElement {
   _updateStyles() {
     if (!this._styleEl) return;
     this._styleEl.textContent = _buildTeamCardStyles(this.config);
-  }
-
-  _renderCard(stateObj) {
-    var a = stateObj.attributes;
-    var rows = Math.min(4, Math.max(1, parseInt(this.config.rows, 10) || 4));
-
-    var teamName = a.team || stateObj.attributes.friendly_name || "";
-    var crest = this.config.image || a.crest || "";
-    var position = parseInt(stateObj.state, 10);
-    var points = a.points;
-    var played = a.played;
-    var won = a.won;
-    var draw = a.draw;
-    var lost = a.lost;
-    var goalsFor = a.goals_for;
-    var goalsAgainst = a.goals_against;
-    var goalDiff = a.goal_difference;
-
-    this._renderHtml(teamName, crest, position, points, played, won, draw, lost, goalsFor, goalsAgainst, goalDiff, rows, "");
   }
 
   _renderHtml(teamName, crest, position, points, played, won, draw, lost, goalsFor, goalsAgainst, goalDiff, rows, groupName) {
@@ -306,9 +270,9 @@ class FotbollstabellerTeamCardEditor extends HTMLElement {
   setConfig(config) {
     this._config = Object.assign({}, config);
     this._leagues = null;
-    this._teams = null;         // list of team names for the selected league
-    this._teamsSlug = null;     // which slug the teams list corresponds to
-    this._render();
+    this._teams = null;
+    this._teamsSlug = null;
+    this._built = false;
   }
 
   set hass(hass) {
@@ -319,18 +283,18 @@ class FotbollstabellerTeamCardEditor extends HTMLElement {
         .callWS({ type: "fotbollstabeller/get_leagues" })
         .then(function (leagues) {
           self._leagues = leagues;
-          if (self._rendered) self._render();
+          self._build();
         })
         .catch(function () {
           self._leagues = [];
+          self._build();
         });
     }
-    if (this._rendered) this._render();
   }
 
   _fetchTeams(slug) {
     if (!this._hass || !slug) return;
-    if (this._teamsSlug === slug && this._teams) return; // already loaded
+    if (this._teamsSlug === slug && this._teams) return;
     this._teamsSlug = slug;
     this._teams = null;
     var self = this;
@@ -338,25 +302,38 @@ class FotbollstabellerTeamCardEditor extends HTMLElement {
       .callWS({ type: "fotbollstabeller/get_standings", url: slug })
       .then(function (result) {
         self._teams = (result.standings || []).map(function (r) { return r.team; });
-        self._render();
+        self._populateTeamDropdown();
       })
       .catch(function () {
         self._teams = [];
-        self._render();
+        self._populateTeamDropdown();
       });
   }
 
-  _render() {
-    this._rendered = true;
+  _populateTeamDropdown() {
+    var teamEl = this.shadowRoot && this.shadowRoot.getElementById("team");
+    if (!teamEl) return;
+    var teams = this._teams || [];
+    var cfg = this._config || {};
+    var html = '<option value="">-- v\u00e4lj lag --</option>';
+    for (var i = 0; i < teams.length; i++) {
+      var tn = teams[i];
+      var sel = tn === cfg.team ? ' selected' : '';
+      html += '<option value="' + tn + '"' + sel + '>' + tn + '</option>';
+    }
+    teamEl.innerHTML = html;
+    teamEl.closest('.row').style.display = teams.length > 0 ? 'flex' : 'none';
+  }
+
+  _build() {
+    if (this._built) return;
+    this._built = true;
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
 
     var cfg = this._config || {};
     var leagues = this._leagues || [];
     var currentRows = cfg.rows || 4;
-    var currentImage = cfg.image || "";
-    var currentSubtitle = cfg.subtitle || "";
 
-    // Determine current slug
     var currentSlug = "";
     if (cfg.group_url) {
       var parts = cfg.group_url.split("/");
@@ -368,23 +345,8 @@ class FotbollstabellerTeamCardEditor extends HTMLElement {
     }
     var showCustom = cfg.group_url && !isKnown;
 
-    // Ensure team list is loaded for current slug
     if (currentSlug && currentSlug !== "__custom__") {
       this._fetchTeams(currentSlug);
-    }
-    var teams = this._teams || [];
-
-    /* Collect entity-based team sensors */
-    var teamEntities = [];
-    if (this._hass) {
-      var states = this._hass.states;
-      for (var sid in states) {
-        var a = states[sid].attributes;
-        if (a && a.team && a.points !== undefined && a.played !== undefined) {
-          teamEntities.push(sid);
-        }
-      }
-      teamEntities.sort();
     }
 
     var html =
@@ -397,11 +359,13 @@ class FotbollstabellerTeamCardEditor extends HTMLElement {
         "input[type=color]{width:40px;height:34px;padding:2px;border:1px solid #ccc;border-radius:4px;cursor:pointer}" +
         ".sep{text-align:center;color:#999;font-size:0.82em;margin:8px 0}" +
         ".desc{font-size:0.78em;color:#888;margin:-4px 0 8px 98px}" +
+        ".custom-row{display:none}" +
+        ".custom-row.show{display:flex}" +
       "</style>";
 
-    // ── League dropdown ──
+    // League dropdown
     html += '<div class="row"><label>Serie</label><select id="league">';
-    html += '<option value=""' + (!cfg.group_url && !cfg.entity ? ' selected' : '') + '>-- v\u00e4lj serie --</option>';
+    html += '<option value="">-- v\u00e4lj serie --</option>';
     for (var i = 0; i < leagues.length; i++) {
       var lg = leagues[i];
       var sel = lg.slug === currentSlug ? ' selected' : '';
@@ -410,46 +374,22 @@ class FotbollstabellerTeamCardEditor extends HTMLElement {
     html += '<option value="__custom__"' + (showCustom ? ' selected' : '') + '>Egen URL\u2026</option>';
     html += '</select></div>';
 
-    if (showCustom) {
-      html += '<div class="row"><label>URL / slug</label>'
-        + '<input type="text" id="custom_url" value="' + (cfg.group_url || '') + '" placeholder="u17-allsvenskan-norra"></div>';
-    }
+    // Custom URL field
+    html += '<div class="row custom-row' + (showCustom ? ' show' : '') + '" id="custom_row"><label>URL / slug</label>'
+      + '<input type="text" id="custom_url" value="' + (cfg.group_url || '') + '" placeholder="u17-allsvenskan-norra"></div>';
 
-    // ── Team dropdown (populated from WS standings) ──
-    if (cfg.group_url && teams.length > 0) {
-      html += '<div class="row"><label>Lag</label><select id="team">';
-      html += '<option value="">-- v\u00e4lj lag --</option>';
-      for (var ti = 0; ti < teams.length; ti++) {
-        var tn = teams[ti];
-        var selT = tn === cfg.team ? ' selected' : '';
-        html += '<option value="' + tn + '"' + selT + '>' + tn + '</option>';
-      }
-      html += '</select></div>';
-    } else if (cfg.group_url && !teams.length && this._teamsSlug) {
-      html += '<div class="desc">Laddar lag\u2026</div>';
-    }
+    // Team dropdown (populated dynamically)
+    html += '<div class="row" id="team_row" style="display:none"><label>Lag</label><select id="team">';
+    html += '<option value="">-- v\u00e4lj lag --</option>';
+    html += '</select></div>';
 
-    // ── OR: Entity dropdown ──
-    if (teamEntities.length > 0) {
-      html += '<div class="sep">\u2014 eller via sensor \u2014</div>';
-      html += '<div class="row"><label>Entity</label><select id="entity">';
-      html += '<option value="">--</option>';
-      for (var j = 0; j < teamEntities.length; j++) {
-        var eid = teamEntities[j];
-        var friendly = this._hass.states[eid].attributes.friendly_name || eid;
-        var selE = eid === cfg.entity ? ' selected' : '';
-        html += '<option value="' + eid + '"' + selE + '>' + friendly + '</option>';
-      }
-      html += '</select></div>';
-    }
-
-    // ── Other options ──
+    // Options
     html += '<div class="row"><label>Bild-URL</label>'
-      + '<input type="text" id="image" value="' + currentImage + '" placeholder="https://..."></div>';
+      + '<input type="text" id="image" value="' + (cfg.image || '') + '" placeholder="https://..."></div>';
     html += '<div class="desc">Valfri URL till lagbild/logotyp.</div>';
 
     html += '<div class="row"><label>Undertext</label>'
-      + '<input type="text" id="subtitle" value="' + currentSubtitle + '" placeholder="auto"></div>';
+      + '<input type="text" id="subtitle" value="' + (cfg.subtitle || '') + '" placeholder="auto"></div>';
     html += '<div class="desc">Visas under lagnamnet.</div>';
 
     html += '<div class="row"><label>Rader</label><select id="rows">';
@@ -465,97 +405,82 @@ class FotbollstabellerTeamCardEditor extends HTMLElement {
     }
     html += '</select></div>';
 
-    // ── Color options ──
+    // Colors
     html += '<div class="sep">\u2014 f\u00e4rger \u2014</div>';
     html += '<div class="row"><label>Rubrikf\u00e4rg</label><input type="color" id="header_color" value="' + (cfg.header_color || '#1a6b3a') + '"></div>';
     html += '<div class="row"><label>Accentf\u00e4rg</label><input type="color" id="accent_color" value="' + (cfg.accent_color || '#7dff7d') + '"></div>';
 
     this.shadowRoot.innerHTML = html;
 
-    // ── Bind events ──
+    // Populate team dropdown if we already have teams
+    if (this._teams && this._teams.length) {
+      this._populateTeamDropdown();
+    }
+
+    // Bind events (once, no re-render)
     var self = this;
 
     this.shadowRoot.getElementById("league").addEventListener("change", function (e) {
       var val = e.target.value;
+      var customRow = self.shadowRoot.getElementById("custom_row");
       if (val === "__custom__") {
         self._config.group_url = "";
-        delete self._config.entity;
         delete self._config.team;
+        customRow.classList.add("show");
         self._teams = null;
         self._teamsSlug = null;
-        self._fireChanged();
-        self._render();
+        self._populateTeamDropdown();
       } else if (val === "") {
         delete self._config.group_url;
         delete self._config.team;
+        customRow.classList.remove("show");
         self._teams = null;
         self._teamsSlug = null;
-        self._fireChanged();
-        self._render();
+        self._populateTeamDropdown();
       } else {
         self._config.group_url = val;
-        delete self._config.entity;
+        delete self._config.team;
+        customRow.classList.remove("show");
+        self._teams = null;
+        self._teamsSlug = null;
+        self._fetchTeams(val);
+      }
+      self._fireChanged();
+    });
+
+    this.shadowRoot.getElementById("custom_url").addEventListener("change", function (e) {
+      var v = e.target.value.trim();
+      if (v) {
+        self._config.group_url = v;
         delete self._config.team;
         self._teams = null;
         self._teamsSlug = null;
-        self._fireChanged();
-        self._fetchTeams(val);
-        self._render();
+        self._fetchTeams(v);
+      } else {
+        delete self._config.group_url;
       }
+      self._fireChanged();
     });
 
-    var customEl = this.shadowRoot.getElementById("custom_url");
-    if (customEl) {
-      customEl.addEventListener("change", function (e) {
-        var v = e.target.value.trim();
-        if (v) {
-          self._config.group_url = v;
-          delete self._config.entity;
-          delete self._config.team;
-          self._teams = null;
-          self._teamsSlug = null;
-          self._fetchTeams(v);
-        } else {
-          delete self._config.group_url;
-        }
-        self._fireChanged();
-        self._render();
-      });
-    }
-
-    var teamEl = this.shadowRoot.getElementById("team");
-    if (teamEl) {
-      teamEl.addEventListener("change", function (e) {
-        self._config.team = e.target.value || undefined;
-        if (!self._config.team) delete self._config.team;
-        self._fireChanged();
-      });
-    }
-
-    var entityEl = this.shadowRoot.getElementById("entity");
-    if (entityEl) {
-      entityEl.addEventListener("change", function (e) {
-        var v = e.target.value;
-        if (v) {
-          self._config.entity = v;
-          delete self._config.group_url;
-          delete self._config.team;
-        } else {
-          delete self._config.entity;
-        }
-        self._fireChanged();
-        self._render();
-      });
-    }
+    this.shadowRoot.getElementById("team").addEventListener("change", function (e) {
+      var v = e.target.value;
+      if (v) { self._config.team = v; } else { delete self._config.team; }
+      self._fireChanged();
+    });
 
     this.shadowRoot.getElementById("image").addEventListener("change", function (e) {
-      self._update("image", e.target.value);
+      var v = e.target.value.trim();
+      if (v) { self._config.image = v; } else { delete self._config.image; }
+      self._fireChanged();
     });
     this.shadowRoot.getElementById("subtitle").addEventListener("change", function (e) {
-      self._update("subtitle", e.target.value);
+      var v = e.target.value.trim();
+      if (v) { self._config.subtitle = v; } else { delete self._config.subtitle; }
+      self._fireChanged();
     });
     this.shadowRoot.getElementById("rows").addEventListener("change", function (e) {
-      self._update("rows", parseInt(e.target.value, 10));
+      self._config.rows = parseInt(e.target.value, 10);
+      self._fireChanged();
     });
     this.shadowRoot.getElementById("header_color").addEventListener("input", function (e) {
       self._config.header_color = e.target.value;
@@ -567,19 +492,8 @@ class FotbollstabellerTeamCardEditor extends HTMLElement {
     });
   }
 
-  _update(key, value) {
-    if (value === undefined || value === "") {
-      delete this._config[key];
-    } else {
-      this._config[key] = value;
-    }
-    this._fireChanged();
-    this._render();
-  }
-
   _fireChanged() {
-    var ev = new CustomEvent("config-changed", { detail: { config: this._config } });
-    this.dispatchEvent(ev);
+    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
   }
 }
 

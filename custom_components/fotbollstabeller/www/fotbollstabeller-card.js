@@ -169,23 +169,8 @@ class FotbollstabellerCard extends HTMLElement {
       return;
     }
 
-    // ── Entity mode: entity is set ──
-    var entity = (this.config && this.config.entity) || "";
-    if (!entity) {
-      this._content.innerHTML = '<p style="padding:12px;color:#999">V\u00e4lj en serie i kortets inst\u00e4llningar.</p>';
-      return;
-    }
-    var stateObj = hass.states[entity];
-    if (!stateObj) {
-      this._content.innerHTML =
-        '<p style="color:red;padding:12px">Entity ' + entity + " not found.</p>";
-      return;
-    }
-    var standings = stateObj.attributes.standings || [];
-    var maxRows = this.config && this.config.max_rows;
-    var limited = maxRows ? standings.slice(0, maxRows) : standings;
-    var groupName = stateObj.attributes.group_name || "";
-    this._render(limited, groupName);
+    // No group_url configured
+    this._content.innerHTML = '<p style="padding:12px;color:#999">V\u00e4lj en serie i kortets inst\u00e4llningar.</p>';
   }
 
   _fetchWS() {
@@ -291,7 +276,7 @@ class FotbollstabellerCardEditor extends HTMLElement {
   setConfig(config) {
     this._config = Object.assign({}, config);
     this._leagues = null;
-    this._render();
+    this._built = false;
   }
 
   set hass(hass) {
@@ -302,25 +287,23 @@ class FotbollstabellerCardEditor extends HTMLElement {
         .callWS({ type: "fotbollstabeller/get_leagues" })
         .then(function (leagues) {
           self._leagues = leagues;
-          if (self._rendered) self._render();
+          self._build();
         })
         .catch(function () {
           self._leagues = [];
+          self._build();
         });
     }
-    if (this._rendered) this._render();
   }
 
-  _render() {
-    this._rendered = true;
-    if (!this.shadowRoot) {
-      this.attachShadow({ mode: "open" });
-    }
+  _build() {
+    if (this._built) return;
+    this._built = true;
+    if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+
     var cfg = this._config || {};
     var leagues = this._leagues || [];
-    var active = Array.isArray(cfg.columns) && cfg.columns.length ? cfg.columns : ALL_COLUMN_KEYS;
 
-    // Determine current slug from group_url
     var currentSlug = "";
     if (cfg.group_url) {
       var parts = cfg.group_url.split("/");
@@ -332,17 +315,7 @@ class FotbollstabellerCardEditor extends HTMLElement {
     }
     var showCustom = cfg.group_url && !isKnown;
 
-    /* Collect table sensor entities (for entity mode fallback) */
-    var tableEntities = [];
-    if (this._hass) {
-      var states = this._hass.states;
-      for (var sid in states) {
-        if (states[sid].attributes && Array.isArray(states[sid].attributes.standings)) {
-          tableEntities.push(sid);
-        }
-      }
-      tableEntities.sort();
-    }
+    var active = Array.isArray(cfg.columns) && cfg.columns.length ? cfg.columns : ALL_COLUMN_KEYS;
 
     var html = '<style>'
       + ':host{display:block;padding:16px}'
@@ -353,6 +326,8 @@ class FotbollstabellerCardEditor extends HTMLElement {
       + 'input[type=color]{width:40px;height:34px;padding:2px;border:1px solid #ccc;border-radius:4px;cursor:pointer}'
       + 'select{flex:1;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:0.9em}'
       + '.sep{text-align:center;color:#999;font-size:0.82em;margin:8px 0}'
+      + '.custom-row{display:none}'
+      + '.custom-row.show{display:flex}'
       + '.col-section{margin-top:12px}'
       + '.col-section h3{margin:0 0 8px;font-size:0.95em;color:#555}'
       + '.col-grid{display:flex;flex-wrap:wrap;gap:6px}'
@@ -361,9 +336,9 @@ class FotbollstabellerCardEditor extends HTMLElement {
       + '.col-chip:hover{opacity:0.85}'
       + '</style>';
 
-    // ── League dropdown ──
+    // League dropdown
     html += '<div class="row"><label>Serie</label><select id="league">';
-    html += '<option value=""' + (!cfg.group_url && !cfg.entity ? ' selected' : '') + '>-- v\u00e4lj serie --</option>';
+    html += '<option value="">-- v\u00e4lj serie --</option>';
     for (var i = 0; i < leagues.length; i++) {
       var lg = leagues[i];
       var sel = lg.slug === currentSlug ? ' selected' : '';
@@ -373,37 +348,22 @@ class FotbollstabellerCardEditor extends HTMLElement {
     html += '</select></div>';
 
     // Custom URL field
-    if (showCustom) {
-      html += '<div class="row"><label>URL / slug</label>'
-        + '<input type="text" id="custom_url" value="' + (cfg.group_url || '') + '" placeholder="u17-allsvenskan-norra"></div>';
-    }
+    html += '<div class="row custom-row' + (showCustom ? ' show' : '') + '" id="custom_row"><label>URL / slug</label>'
+      + '<input type="text" id="custom_url" value="' + (cfg.group_url || '') + '" placeholder="u17-allsvenskan-norra"></div>';
 
-    // ── OR: Entity dropdown (for sensor-based mode) ──
-    if (tableEntities.length > 0) {
-      html += '<div class="sep">\u2014 eller via sensor \u2014</div>';
-      html += '<div class="row"><label>Entity</label><select id="entity">';
-      html += '<option value=""' + (!cfg.entity ? ' selected' : '') + '>--</option>';
-      for (var j = 0; j < tableEntities.length; j++) {
-        var eid = tableEntities[j];
-        var friendly = this._hass.states[eid].attributes.friendly_name || eid;
-        var selE = eid === cfg.entity ? ' selected' : '';
-        html += '<option value="' + eid + '"' + selE + '>' + friendly + '</option>';
-      }
-      html += '</select></div>';
-    }
-
-    // ── Other options ──
+    // Options
     html += '<div class="row"><label>Favoritlag</label>'
-      + '<input type="text" id="fav" value="' + (cfg.favorite_team || "") + '"></div>';
+      + '<input type="text" id="fav" value="' + (cfg.favorite_team || "") + '" placeholder="Markeras i gult"></div>';
     html += '<div class="row"><label>Max rader</label>'
       + '<input type="number" id="maxrows" min="0" value="' + (cfg.max_rows || "") + '" placeholder="alla"></div>';
 
-    // ── Color options ──
+    // Colors
     html += '<div class="sep">\u2014 f\u00e4rger \u2014</div>';
     html += '<div class="row"><label>Rubrikf\u00e4rg</label><input type="color" id="header_color" value="' + (cfg.header_color || '#1a6b3a') + '"></div>';
     html += '<div class="row"><label>Rubriktext</label><input type="color" id="header_text_color" value="' + (cfg.header_text_color || '#ffffff') + '"></div>';
     html += '<div class="row"><label>Accentf\u00e4rg</label><input type="color" id="accent_color" value="' + (cfg.accent_color || '#1a6b3a') + '"></div>';
 
+    // Columns
     html += '<div class="col-section"><h3>Kolumner (klicka f\u00f6r att v\u00e4xla)</h3><div class="col-grid">';
     for (var ci = 0; ci < FOTBOLLSTABELLER_COLUMNS.length; ci++) {
       var c = FOTBOLLSTABELLER_COLUMNS[ci];
@@ -415,66 +375,43 @@ class FotbollstabellerCardEditor extends HTMLElement {
 
     this.shadowRoot.innerHTML = html;
 
-    // ── Bind events ──
+    // Bind events (once, no re-render)
     var self = this;
 
     this.shadowRoot.getElementById("league").addEventListener("change", function (e) {
       var val = e.target.value;
+      var customRow = self.shadowRoot.getElementById("custom_row");
       if (val === "__custom__") {
-        // will show custom URL field
         self._config.group_url = "";
-        delete self._config.entity;
-        self._fireChanged();
-        self._render();
+        customRow.classList.add("show");
       } else if (val === "") {
         delete self._config.group_url;
-        self._fireChanged();
-        self._render();
+        customRow.classList.remove("show");
       } else {
         self._config.group_url = val;
-        delete self._config.entity;
-        self._fireChanged();
-        self._render();
+        customRow.classList.remove("show");
       }
+      self._fireChanged();
     });
 
-    var customEl = this.shadowRoot.getElementById("custom_url");
-    if (customEl) {
-      customEl.addEventListener("change", function (e) {
-        var v = e.target.value.trim();
-        if (v) {
-          self._config.group_url = v;
-          delete self._config.entity;
-        } else {
-          delete self._config.group_url;
-        }
-        self._fireChanged();
-        self._render();
-      });
-    }
-
-    var entityEl = this.shadowRoot.getElementById("entity");
-    if (entityEl) {
-      entityEl.addEventListener("change", function (e) {
-        var v = e.target.value;
-        if (v) {
-          self._config.entity = v;
-          delete self._config.group_url;
-        } else {
-          delete self._config.entity;
-        }
-        self._fireChanged();
-        self._render();
-      });
-    }
+    this.shadowRoot.getElementById("custom_url").addEventListener("change", function (e) {
+      var v = e.target.value.trim();
+      if (v) { self._config.group_url = v; } else { delete self._config.group_url; }
+      self._fireChanged();
+    });
 
     this.shadowRoot.getElementById("fav").addEventListener("change", function (e) {
-      self._update("favorite_team", e.target.value);
+      var v = e.target.value.trim();
+      if (v) { self._config.favorite_team = v; } else { delete self._config.favorite_team; }
+      self._fireChanged();
     });
+
     this.shadowRoot.getElementById("maxrows").addEventListener("change", function (e) {
       var v = parseInt(e.target.value, 10);
-      self._update("max_rows", v > 0 ? v : undefined);
+      if (v > 0) { self._config.max_rows = v; } else { delete self._config.max_rows; }
+      self._fireChanged();
     });
+
     this.shadowRoot.getElementById("header_color").addEventListener("input", function (e) {
       self._config.header_color = e.target.value;
       self._fireChanged();
@@ -487,10 +424,13 @@ class FotbollstabellerCardEditor extends HTMLElement {
       self._config.accent_color = e.target.value;
       self._fireChanged();
     });
+
     var chips = this.shadowRoot.querySelectorAll(".col-chip");
     for (var cj = 0; cj < chips.length; cj++) {
       chips[cj].addEventListener("click", function () {
-        self._toggleColumn(this.getAttribute("data-key"));
+        var key = this.getAttribute("data-key");
+        self._toggleColumn(key);
+        this.classList.toggle("active");
       });
     }
   }
@@ -513,25 +453,15 @@ class FotbollstabellerCardEditor extends HTMLElement {
       cols.splice(insertIdx, 0, key);
     }
     if (cols.length === ALL_COLUMN_KEYS.length) {
-      this._update("columns", undefined);
+      delete this._config.columns;
     } else {
-      this._update("columns", cols);
-    }
-  }
-
-  _update(key, value) {
-    if (value === undefined || value === "") {
-      delete this._config[key];
-    } else {
-      this._config[key] = value;
+      this._config.columns = cols;
     }
     this._fireChanged();
-    this._render();
   }
 
   _fireChanged() {
-    var ev = new CustomEvent("config-changed", { detail: { config: this._config } });
-    this.dispatchEvent(ev);
+    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
   }
 }
 
