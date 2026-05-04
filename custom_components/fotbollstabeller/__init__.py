@@ -76,20 +76,30 @@ async def ws_get_leagues(
 
 
 def _register_static_paths(hass: HomeAssistant) -> None:
-    """Register static paths for card JS files."""
+    """Register static paths for card JS files (sync fallback)."""
     www_dir = pathlib.Path(__file__).parent / "www"
     js_path = str(www_dir / "fotbollstabeller-card.js")
     team_js_path = str(www_dir / "fotbollstabeller-team-card.js")
+    _LOGGER.debug("Fotbollstabeller: JS files at %s", www_dir)
 
     try:
         hass.http.register_static_path(_CARD_URL, js_path, False)
         hass.http.register_static_path(_TEAM_CARD_URL, team_js_path, False)
+        _LOGGER.debug("Fotbollstabeller: static paths registered (sync)")
     except Exception as err:  # noqa: BLE001
-        _LOGGER.warning("Fotbollstabeller: static path registration: %s", err)
+        _LOGGER.warning("Fotbollstabeller: sync static path error: %s", err)
 
 
-async def _async_register_static_paths(hass: HomeAssistant) -> None:
-    """Register static paths (async variant for newer HA)."""
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Serve the card JS and register websocket commands."""
+    hass.data.setdefault(DOMAIN, {})
+
+    # Register websocket commands
+    websocket_api.async_register_command(hass, ws_get_standings)
+    websocket_api.async_register_command(hass, ws_get_leagues)
+    _LOGGER.debug("Fotbollstabeller: WS commands registered")
+
+    # Register static paths for JS files
     www_dir = pathlib.Path(__file__).parent / "www"
     js_path = str(www_dir / "fotbollstabeller-card.js")
     team_js_path = str(www_dir / "fotbollstabeller-team-card.js")
@@ -103,37 +113,26 @@ async def _async_register_static_paths(hass: HomeAssistant) -> None:
                 StaticPathConfig(_TEAM_CARD_URL, team_js_path, False),
             ]
         )
+        _LOGGER.debug("Fotbollstabeller: static paths registered (async)")
     except (ImportError, AttributeError):
+        _LOGGER.debug("Fotbollstabeller: StaticPathConfig not available, using sync")
         _register_static_paths(hass)
     except Exception as err:  # noqa: BLE001
-        _LOGGER.warning("Fotbollstabeller: async static path registration: %s", err)
+        _LOGGER.warning("Fotbollstabeller: async static path error: %s", err)
         _register_static_paths(hass)
 
+    # Register JS as frontend resources
+    for card_url in (_CARD_URL, _TEAM_CARD_URL):
+        url = f"{card_url}?v={_CARD_VERSION}"
+        add_extra_js_url(hass, url)
+        _LOGGER.info("Fotbollstabeller: card JS registered at %s", url)
 
-async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Register websocket commands (runs once when HA starts)."""
-    hass.data.setdefault(DOMAIN, {})
-
-    websocket_api.async_register_command(hass, ws_get_standings)
-    websocket_api.async_register_command(hass, ws_get_leagues)
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Fotbollstabeller from a config entry."""
     hass.data.setdefault(DOMAIN, {})
-
-    # Only register cards once (even if multiple entries exist)
-    if "_cards_registered" not in hass.data[DOMAIN]:
-        await _async_register_static_paths(hass)
-
-        for card_url in (_CARD_URL, _TEAM_CARD_URL):
-            url = f"{card_url}?v={_CARD_VERSION}"
-            add_extra_js_url(hass, url)
-            _LOGGER.info("Fotbollstabeller: card JS registered at %s", url)
-
-        hass.data[DOMAIN]["_cards_registered"] = True
-
     return True
 
 
