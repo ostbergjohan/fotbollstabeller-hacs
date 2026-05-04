@@ -101,12 +101,11 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             hass.http.register_static_path(_CARD_URL, js_path, False)
             hass.http.register_static_path(_TEAM_CARD_URL, team_js_path, False)
         except Exception as err:  # noqa: BLE001
-            _LOGGER.error("Fotbollstabeller: could not register static path: %s", err)
-            return True
+            _LOGGER.warning("Fotbollstabeller: static path registration: %s", err)
     except Exception as err:  # noqa: BLE001
-        _LOGGER.error("Fotbollstabeller: could not register static path: %s", err)
-        return True
+        _LOGGER.warning("Fotbollstabeller: static path registration: %s", err)
 
+    # Always register the JS URLs so the cards are available in the frontend
     for card_url in (_CARD_URL, _TEAM_CARD_URL):
         url = f"{card_url}?v={_CARD_VERSION}"
         add_extra_js_url(hass, url)
