@@ -494,24 +494,39 @@ class FotbollstabellerCardEditor extends HTMLElement {
 }
 
 /* ── Register elements ─────────────────────────────────────────── */
-if (!customElements.get("fotbollstabeller-card-editor")) {
-  customElements.define("fotbollstabeller-card-editor", FotbollstabellerCardEditor);
-}
-if (!customElements.get("fotbollstabeller-card")) {
-  customElements.define("fotbollstabeller-card", FotbollstabellerCard);
-  console.info(
-    "%c FOTBOLLSTABELLER-CARD %c loaded",
-    "color:white;background:#1a6b3a;font-weight:700;padding:2px 6px",
-    ""
-  );
-}
+(function() {
+  function registerCards() {
+    if (!customElements.get("fotbollstabeller-card-editor")) {
+      customElements.define("fotbollstabeller-card-editor", FotbollstabellerCardEditor);
+    }
+    if (!customElements.get("fotbollstabeller-card")) {
+      customElements.define("fotbollstabeller-card", FotbollstabellerCard);
+      console.info(
+        "%c FOTBOLLSTABELLER-CARD %c v12 loaded",
+        "color:white;background:#1a6b3a;font-weight:700;padding:2px 6px",
+        ""
+      );
+    }
 
-window.customCards = window.customCards || [];
-if (!window.customCards.some(function (c) { return c.type === "fotbollstabeller-card"; })) {
-  window.customCards.push({
-    type: "fotbollstabeller-card",
-    name: "Fotbollstabeller",
-    description: "Tabell från fotbollstabeller.nu med konfiguerbara kolumner.",
-    preview: false,
+    window.customCards = window.customCards || [];
+    if (!window.customCards.some(function (c) { return c.type === "fotbollstabeller-card"; })) {
+      window.customCards.push({
+        type: "fotbollstabeller-card",
+        name: "Fotbollstabeller",
+        description: "Tabell från fotbollstabeller.nu med konfiguerbara kolumner.",
+        preview: false,
+      });
+    }
+  }
+
+  // Register immediately
+  registerCards();
+
+  // Also register on HA frontend reconnect events (fires when connection is re-established)
+  window.addEventListener("connection-status", function(e) {
+    if (e.detail === "connected") {
+      // Small delay to let HA frontend finish setup
+      setTimeout(registerCards, 100);
+    }
   });
-}
+})();

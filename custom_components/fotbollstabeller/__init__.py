@@ -23,7 +23,7 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 _CARD_URL = f"/{DOMAIN}/fotbollstabeller-card.js"
 _TEAM_CARD_URL = f"/{DOMAIN}/fotbollstabeller-team-card.js"
-_CARD_VERSION = "11"
+_CARD_VERSION = "12"
 
 _WS_CACHE_TTL = 14400  # 4 hours
 
@@ -83,23 +83,33 @@ async def _register_cards(hass: HomeAssistant) -> None:
     js_path = str(www_dir / "fotbollstabeller-card.js")
     team_js_path = str(www_dir / "fotbollstabeller-team-card.js")
 
-    # Register static paths
+    # Register static paths (cache_headers=True so browser can cache the JS files)
+    registered = False
     try:
         from homeassistant.components.http import StaticPathConfig
         await hass.http.async_register_static_paths(
             [
-                StaticPathConfig(_CARD_URL, js_path, False),
-                StaticPathConfig(_TEAM_CARD_URL, team_js_path, False),
+                StaticPathConfig(_CARD_URL, js_path, True),
+                StaticPathConfig(_TEAM_CARD_URL, team_js_path, True),
             ]
         )
+        registered = True
     except (ImportError, AttributeError):
+        # Older HA version without StaticPathConfig
         try:
-            hass.http.register_static_path(_CARD_URL, js_path, False)
-            hass.http.register_static_path(_TEAM_CARD_URL, team_js_path, False)
-        except Exception:  # noqa: BLE001
-            pass
-    except Exception:  # noqa: BLE001
-        pass
+            hass.http.register_static_path(_CARD_URL, js_path, True)
+            hass.http.register_static_path(_TEAM_CARD_URL, team_js_path, True)
+            registered = True
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error("Fotbollstabeller: failed to register static paths (legacy): %s", err)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.error("Fotbollstabeller: failed to register static paths: %s", err)
+
+    if not registered:
+        _LOGGER.error(
+            "Fotbollstabeller: static path registration failed – cards will NOT load"
+        )
+        return
 
     # Register JS resources with frontend
     for card_url in (_CARD_URL, _TEAM_CARD_URL):

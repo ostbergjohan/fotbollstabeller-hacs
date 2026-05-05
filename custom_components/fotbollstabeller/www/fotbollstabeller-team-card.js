@@ -525,24 +525,38 @@ class FotbollstabellerTeamCardEditor extends HTMLElement {
 
 
 /* ── Register elements ─────────────────────────────────────────── */
-if (!customElements.get("fotbollstabeller-team-card-editor")) {
-  customElements.define("fotbollstabeller-team-card-editor", FotbollstabellerTeamCardEditor);
-}
-if (!customElements.get("fotbollstabeller-team-card")) {
-  customElements.define("fotbollstabeller-team-card", FotbollstabellerTeamCard);
-  console.info(
-    "%c FOTBOLLSTABELLER-TEAM-CARD %c loaded",
-    "color:white;background:#1a6b3a;font-weight:700;padding:2px 6px",
-    ""
-  );
-}
+(function() {
+  function registerCards() {
+    if (!customElements.get("fotbollstabeller-team-card-editor")) {
+      customElements.define("fotbollstabeller-team-card-editor", FotbollstabellerTeamCardEditor);
+    }
+    if (!customElements.get("fotbollstabeller-team-card")) {
+      customElements.define("fotbollstabeller-team-card", FotbollstabellerTeamCard);
+      console.info(
+        "%c FOTBOLLSTABELLER-TEAM-CARD %c v12 loaded",
+        "color:white;background:#1a6b3a;font-weight:700;padding:2px 6px",
+        ""
+      );
+    }
 
-window.customCards = window.customCards || [];
-if (!window.customCards.some(function (c) { return c.type === "fotbollstabeller-team-card"; })) {
-  window.customCards.push({
-    type: "fotbollstabeller-team-card",
-    name: "Fotbollstabeller Lag",
-    description: "Hero-kort f\u00f6r ett enskilt lag med valfri bild och konfiguerbara detaljer.",
-    preview: false,
+    window.customCards = window.customCards || [];
+    if (!window.customCards.some(function (c) { return c.type === "fotbollstabeller-team-card"; })) {
+      window.customCards.push({
+        type: "fotbollstabeller-team-card",
+        name: "Fotbollstabeller Lag",
+        description: "Hero-kort f\u00f6r ett enskilt lag med valfri bild och konfiguerbara detaljer.",
+        preview: false,
+      });
+    }
+  }
+
+  // Register immediately
+  registerCards();
+
+  // Also register on HA frontend reconnect events
+  window.addEventListener("connection-status", function(e) {
+    if (e.detail === "connected") {
+      setTimeout(registerCards, 100);
+    }
   });
-}
+})();
