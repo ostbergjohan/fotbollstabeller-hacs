@@ -25,7 +25,7 @@ _CARD_URL = f"/{DOMAIN}/fotbollstabeller-card.js"
 _TEAM_CARD_URL = f"/{DOMAIN}/fotbollstabeller-team-card.js"
 _CARD_VERSION = "11"
 
-_WS_CACHE_TTL = 300  # 5 minutes
+_WS_CACHE_TTL = 14400  # 4 hours
 
 
 # ─── Websocket commands ────────────────────────────────────────────

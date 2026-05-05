@@ -155,7 +155,7 @@ class FotbollstabellerCard extends HTMLElement {
     // ── WS mode: group_url is set ──
     if (this.config && this.config.group_url) {
       var now = Date.now();
-      if ((!this._wsData || now - (this._lastFetch || 0) > 1800000) && !this._fetching) {
+      if ((!this._wsData || now - (this._lastFetch || 0) > 14400000) && !this._fetching) {
         this._fetchWS();
       }
       if (this._wsData) {

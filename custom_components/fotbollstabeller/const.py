@@ -4,7 +4,7 @@ DOMAIN = "fotbollstabeller"
 CONF_GROUP_URL = "group_url"
 CONF_SCAN_INTERVAL = "scan_interval"
 
-DEFAULT_SCAN_INTERVAL = 3600  # seconds (1 hour)
+DEFAULT_SCAN_INTERVAL = 14400  # seconds (4 hours)
 
 BASE_URL = "https://www.fotbollstabeller.nu"
 
