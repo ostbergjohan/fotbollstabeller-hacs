@@ -129,6 +129,19 @@ class FotbollstabellerCard extends HTMLElement {
     return { group_url: "" };
   }
 
+  connectedCallback() {
+    // Re-trigger render on reconnection
+    if (this._initialized && this._hass) {
+      this._fetching = false;
+      this.hass = this._hass;
+    }
+  }
+
+  disconnectedCallback() {
+    // Clear fetching flag so reconnection can retry
+    this._fetching = false;
+  }
+
   setConfig(config) {
     var urlChanged = !this.config || config.group_url !== this.config.group_url;
     this.config = config;
@@ -155,6 +168,10 @@ class FotbollstabellerCard extends HTMLElement {
     // ── WS mode: group_url is set ──
     if (this.config && this.config.group_url) {
       var now = Date.now();
+      // Safety: reset _fetching if stuck for more than 30s
+      if (this._fetching && this._fetchStart && now - this._fetchStart > 30000) {
+        this._fetching = false;
+      }
       if ((!this._wsData || now - (this._lastFetch || 0) > 14400000) && !this._fetching) {
         this._fetchWS();
       }
@@ -176,6 +193,7 @@ class FotbollstabellerCard extends HTMLElement {
   _fetchWS() {
     if (!this._hass || this._fetching) return;
     this._fetching = true;
+    this._fetchStart = Date.now();
     var self = this;
     this._hass
       .callWS({ type: "fotbollstabeller/get_standings", url: this.config.group_url })
@@ -188,14 +206,24 @@ class FotbollstabellerCard extends HTMLElement {
       .catch(function (err) {
         console.error("Fotbollstabeller fetch error:", err);
         self._fetching = false;
-        self._content.innerHTML =
-          '<p style="color:red;padding:12px">Kunde inte h\u00e4mta data.</p>';
+        if (self._content) {
+          self._content.innerHTML =
+            '<p style="color:red;padding:12px">Kunde inte h\u00e4mta data.</p>';
+        }
+        // Retry after 5 seconds
+        setTimeout(function () {
+          if (self._hass && !self._wsData) self.hass = self._hass;
+        }, 5000);
       });
   }
 
   _init() {
+    if (this._initialized) return;
     this._initialized = true;
-    var shadow = this.attachShadow({ mode: "open" });
+    // Guard: reuse existing shadowRoot if present (e.g. after a hot-reload)
+    var shadow = this.shadowRoot || this.attachShadow({ mode: "open" });
+    // Clear any stale content in existing shadow root
+    while (shadow.firstChild) shadow.removeChild(shadow.firstChild);
     this._styleEl = document.createElement("style");
     var card = document.createElement("ha-card");
     this._content = document.createElement("div");
