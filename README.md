@@ -4,48 +4,48 @@
 
 ![Fotbollstabeller](images/ha-fotbollstabeller.png)
 
-Home Assistant-integration som visar fotbollstabeller från **fotbollstabeller.nu** direkt i din dashboard. Stödjer alla serier – Allsvenskan, Superettan, Division 1–3, P17/P19/F17/F19, med mera. Ingen API-nyckel krävs.
+A Home Assistant integration that displays Swedish football league tables from **fotbollstabeller.nu** directly in your dashboard. Supports all leagues – Allsvenskan, Superettan, Division 1–3, P17/P19/F17/F19, and more. No API key required.
 
 ---
 
-## Funktioner
+## Features
 
-- 📋 **Tabellkort** med konfiguerbara kolumner och färger
-- 🏟️ **Lagkort** (hero-stil) med poäng, målstatistik och valfri klubbild
-- 🎨 **Anpassningsbara färger** – rubrik, text och accent direkt i kortets editor
-- ⚡ **Zero-config** – installera integrationen, välj serie direkt i kortet
-- 🔄 Data hämtas via WebSocket med 5 min cache
-- 🔑 Ingen API-nyckel krävs
+- 📋 **Table card** with configurable columns and colors
+- 🏟️ **Team card** (hero-style) with points, goal stats, and optional club image
+- 🎨 **Customizable colors** – header, text, and accent directly in the card editor
+- ⚡ **Zero-config** – install the integration, choose league directly in the card
+- 🔄 Data fetched via WebSocket with 5 min cache
+- 🔑 No API key required
 
 ---
 
 ## Installation
 
-1. Gå till **HACS → Integrations → ⋮ → Custom repositories**
-2. Lägg till `https://github.com/ostbergjohan/fotbollstabeller-hacs` som **Integration**
-3. Sök efter **Fotbollstabeller** och klicka **Download**
-4. **Starta om Home Assistant**
-5. Gå till **Settings → Devices & Services → Add Integration → Fotbollstabeller**
-6. Klicka **Skicka** – klart! Ingen konfiguration behövs.
+1. Go to **HACS → Integrations → ⋮ → Custom repositories**
+2. Add `https://github.com/ostbergjohan/fotbollstabeller-hacs` as **Integration**
+3. Search for **Fotbollstabeller** and click **Download**
+4. **Restart Home Assistant**
+5. Go to **Settings → Devices & Services → Add Integration → Fotbollstabeller**
+6. Click **Submit** – done! No configuration needed.
 
-Serier väljs sedan direkt i korten.
+Leagues are selected directly in the cards.
 
 ---
 
-## Lovelace-kort
+## Lovelace Cards
 
-### Tabellkort
+### Table Card
 
-Lägg till via **Edit Dashboard → Add Card → Custom: Fotbollstabeller**.
+Add via **Edit Dashboard → Add Card → Custom: Fotbollstabeller**.
 
-Editorn låter dig:
-- Välja serie från en lista eller ange en egen URL/slug
-- Ställa in favoritlag (markeras i gult)
-- Begränsa antal rader
-- Välja vilka kolumner som visas
-- Anpassa färger (rubrik, rubriktext, accent)
+The editor allows you to:
+- Select a league from a list or enter a custom URL/slug
+- Set a favorite team (highlighted in yellow)
+- Limit the number of rows
+- Choose which columns to display
+- Customize colors (header, header text, accent)
 
-YAML-exempel:
+YAML example:
 
 ```yaml
 type: custom:fotbollstabeller-card
@@ -67,9 +67,9 @@ columns:
   - points
 ```
 
-### Lagkort
+### Team Card
 
-Hero-kort för ett enskilt lag:
+Hero card for a single team:
 
 ```yaml
 type: custom:fotbollstabeller-team-card
@@ -82,46 +82,46 @@ header_color: "#00543e"
 accent_color: "#7dff7d"
 ```
 
-**rows-nivåer:**
+**Row levels:**
 
-| Nivå | Innehåll |
-|------|----------|
-| 1 | Namn + position |
-| 2 | + poäng |
-| 3 | + V/O/F |
-| 4 | + mål & målskillnad |
+| Level | Content |
+|-------|---------|
+| 1 | Name + position |
+| 2 | + points |
+| 3 | + W/D/L |
+| 4 | + goals & goal difference |
 
 ---
 
-## Färginställningar
+## Color Settings
 
-Båda korten stödjer färgval via den visuella editorn eller YAML:
+Both cards support color selection via the visual editor or YAML:
 
-| Inställning | Tabellkort | Lagkort | Standard |
+| Setting | Table Card | Team Card | Default |
 |---|---|---|---|
-| `header_color` | Header-bakgrund | Hero + poängbar | `#1a6b3a` |
-| `header_text_color` | Header-textfärg | — | `#ffffff` |
-| `accent_color` | Poängkolumn | Poängtext | `#1a6b3a` / `#7dff7d` |
+| `header_color` | Header background | Hero + points bar | `#1a6b3a` |
+| `header_text_color` | Header text color | — | `#ffffff` |
+| `accent_color` | Points column | Points text | `#1a6b3a` / `#7dff7d` |
 
 ---
 
-## Tillgängliga serier
+## Available Leagues
 
-Dropdown i editorn innehåller bl.a.:
+The dropdown in the editor includes:
 
-- Allsvenskan & Superettan (herrar/damer)
-- Elitettan (damer)
+- Allsvenskan & Superettan (men/women)
+- Elitettan (women)
 - Ettan Norra/Södra
-- Division 1–3 (herrar/damer)
+- Division 1–3 (men/women)
 - P17/P19/F17/F19 Allsvenskan & Superettan
 
-Du kan även ange **vilken grupp-URL som helst** från fotbollstabeller.nu via "Egen URL".
+You can also enter **any group URL** from fotbollstabeller.nu via "Custom URL".
 
 ---
 
-## Datakälla
+## Data Source
 
-Data hämtas genom att scrapa gruppsidan på [fotbollstabeller.nu](https://www.fotbollstabeller.nu/). Ingen API-nyckel krävs. Kortet hämtar data via WebSocket med 5 minuters cache.
+Data is fetched by scraping the group page on [fotbollstabeller.nu](https://www.fotbollstabeller.nu/). No API key required. The card fetches data via WebSocket with a 5-minute cache.
 
 ---
 
