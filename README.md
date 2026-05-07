@@ -2,6 +2,8 @@
 
 ![version](https://img.shields.io/badge/version-3.0.0-blue) ![hacs](https://img.shields.io/badge/HACS-Custom-orange)
 
+![Fotbollstabeller](images/ha-fotbollstabeller.png)
+
 Home Assistant-integration som visar fotbollstabeller från **fotbollstabeller.nu** direkt i din dashboard. Stödjer alla serier – Allsvenskan, Superettan, Division 1–3, P17/P19/F17/F19, med mera. Ingen API-nyckel krävs.
 
 ---
