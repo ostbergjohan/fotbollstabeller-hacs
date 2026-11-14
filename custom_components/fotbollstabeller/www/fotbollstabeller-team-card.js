@@ -179,7 +179,7 @@ class FotbollstabellerTeamCard extends HTMLElement {
 
   _renderFromRow(row, groupName) {
     var rows = Math.min(4, Math.max(1, parseInt(this.config.rows, 10) || 4));
-    var crest = this.config.image || "";
+    var crest = this.config.image || row.team_logo || "";
     var teamName = row.team || "";
     var position = row.position;
     var points = row.points;

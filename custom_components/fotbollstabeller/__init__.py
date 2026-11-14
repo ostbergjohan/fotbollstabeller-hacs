@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import homeassistant.helpers.config_validation as cv
 
-from .const import DOMAIN, BASE_URL, KNOWN_LEAGUES
+from .const import DOMAIN, BASE_URL, DEFAULT_API_KEY, KNOWN_LEAGUES
 from .coordinator import fetch_standings
 
 _LOGGER = logging.getLogger(__name__)
@@ -41,9 +41,9 @@ _WS_CACHE_TTL = 14400  # 4 hours
 async def ws_get_standings(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
-    """Fetch and return standings for any fotbollstabeller.nu group URL/slug."""
+    """Fetch and return standings for a Swedish league identifier."""
     raw = msg["url"].strip().rstrip("/")
-    url = raw if raw.startswith("http") else f"{BASE_URL}/home/group/{raw}"
+    url = raw if raw.startswith("http") else raw
 
     cache: dict = hass.data[DOMAIN].setdefault("_ws_cache", {})
     now = time.time()
@@ -52,8 +52,9 @@ async def ws_get_standings(
         return
 
     session = async_get_clientsession(hass)
+    api_key = hass.data.get(DOMAIN, {}).get("api_key") or DEFAULT_API_KEY
     try:
-        group_name, standings = await fetch_standings(session, url)
+        group_name, standings = await fetch_standings(session, url, api_key=api_key)
     except Exception as err:  # noqa: BLE001
         connection.send_error(msg["id"], "fetch_error", str(err))
         return
@@ -141,6 +142,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Fotbollstabeller from a config entry."""
     _LOGGER.warning("Fotbollstabeller: async_setup_entry called")
     hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN]["api_key"] = (entry.data.get("api_key") or "").strip() or DEFAULT_API_KEY
 
     # Fallback: if async_setup was not called, register everything here
     if not hass.data[DOMAIN].get("_cards_done"):

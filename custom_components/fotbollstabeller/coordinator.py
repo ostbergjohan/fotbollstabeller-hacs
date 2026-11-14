@@ -23,22 +23,36 @@ _HEADERS = {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept": "application/json,text/plain,*/*",
     "Accept-Language": "sv-SE,sv;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Referer": "https://www.fotbollstabeller.nu/",
-    "DNT": "1",
-    "Upgrade-Insecure-Requests": "1",
+    "Origin": "https://www.thesportsdb.com",
+    "Referer": "https://www.thesportsdb.com/",
     "Connection": "keep-alive",
 }
 
-_FALLBACK_HEADERS = {
-    **_HEADERS,
-    "User-Agent": (
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
-    ),
-    "Referer": "https://www.fotbollstabeller.nu/allsvenskan",
+_SPORTSDB_LEAGUE_ALIASES = {
+    "allsvenskan": "4347",
+    "allsvenskan-herrar": "4347",
+    "fotbollsallsvenskan": "4347",
+    "swedish allsvenskan": "4347",
+    "damallsvenskan": "5209",
+    "sweden damallsvenskan": "5209",
+    "svenska cupen": "4756",
+    "cupen": "4756",
+    "ettan norra": "4674",
+    "division 1 north": "4674",
+    "swedish division 1 north": "4674",
+    "ettan sodra": "4845",
+    "division 1 south": "4845",
+    "swedish division 1 south": "4845",
+}
+
+_SPORTSDB_LEAGUE_NAMES = {
+    "4347": "Swedish Allsvenskan",
+    "5209": "Sweden Damallsvenskan",
+    "4756": "Svenska Cupen",
+    "4674": "Swedish Division 1 North",
+    "4845": "Swedish Division 1 South",
 }
 
 # GD column: "19-7 (12)" or "0-16 (−16)"
@@ -174,6 +188,82 @@ def _extract_group_id(html: str) -> str | None:
     return m.group(1) if m else None
 
 
+def _resolve_league_id(group_url: str) -> str:
+    """Resolve a legacy slug, team-card input or API league ID to a SportsDB league id."""
+    raw = (group_url or "").strip().rstrip("/")
+    if not raw:
+        raise UpdateFailed("No league specified")
+
+    text = raw
+    if text.startswith("http://") or text.startswith("https://"):
+        text = text.split("//", 1)[-1].split("/", 1)[-1] if "/" in text.split("//", 1)[-1] else ""
+        if not text:
+            raise UpdateFailed("Unsupported league URL")
+
+    cleaned = re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+    if cleaned.isdigit():
+        return cleaned
+
+    if cleaned in _SPORTSDB_LEAGUE_ALIASES:
+        return _SPORTSDB_LEAGUE_ALIASES[cleaned]
+
+    # Accept legacy names like 'allsvenskan-herrar' after converting to a space-separated key.
+    normalized = cleaned.replace("-", " ")
+    if normalized in _SPORTSDB_LEAGUE_ALIASES:
+        return _SPORTSDB_LEAGUE_ALIASES[normalized]
+
+    if text in _SPORTSDB_LEAGUE_NAMES.values():
+        for league_id, league_name in _SPORTSDB_LEAGUE_NAMES.items():
+            if league_name == text:
+                return league_id
+
+    raise UpdateFailed(f"Unsupported league '{group_url}'")
+
+
+def _normalize_sportsdb_table(table: list[dict]) -> list[dict]:
+    """Map SportsDB table rows to the Home Assistant standings schema."""
+    standings: list[dict] = []
+    for row in table:
+        team = str(row.get("strTeam") or "").strip()
+        if not team:
+            continue
+
+        try:
+            position = int(str(row.get("intRank") or 0))
+        except (TypeError, ValueError):
+            position = 0
+
+        try:
+            played = int(str(row.get("intPlayed") or 0))
+            won = int(str(row.get("intWin") or 0))
+            draw = int(str(row.get("intDraw") or 0))
+            lost = int(str(row.get("intLoss") or 0))
+            goals_for = int(str(row.get("intGoalsFor") or 0))
+            goals_against = int(str(row.get("intGoalsAgainst") or 0))
+            goal_difference = int(str(row.get("intGoalDifference") or 0))
+            points = int(str(row.get("intPoints") or 0))
+        except (TypeError, ValueError):
+            continue
+
+        standings.append(
+            {
+                "position": position,
+                "team": team,
+                "team_short": team,
+                "team_logo": row.get("strBadge"),
+                "played_games": played,
+                "won": won,
+                "draw": draw,
+                "lost": lost,
+                "goals_for": goals_for,
+                "goals_against": goals_against,
+                "goal_difference": goal_difference,
+                "points": points,
+            }
+        )
+    return standings
+
+
 def _extract_group_name(html: str) -> str:
     """Extract the group name from the page markup."""
     h1p = _H1Parser()
@@ -288,61 +378,31 @@ async def fetch_standings(
     group_url: str,
     timeout: aiohttp.ClientTimeout | None = None,
 ) -> tuple[str, list[dict]]:
-    """Fetch standings for a group URL or slug.
-
-    Two-step process:
-    1. GET the group page to extract the group name (<h1>) and AJAX id (data-id).
-    2. GET /home/get_group_details/{id} to get the div-based standings table.
-
-    Returns (group_name, standings_list).
-    """
+    """Fetch standings from the SportsDB API using a legacy league slug/id."""
     if timeout is None:
         timeout = aiohttp.ClientTimeout(total=15)
 
-    # Normalise URL
-    url = group_url.strip().rstrip("/")
-    if not url.startswith("http"):
-        url = f"{BASE_URL}/home/group/{url}"
+    league_id = _resolve_league_id(group_url)
+    league_name = _SPORTSDB_LEAGUE_NAMES.get(league_id, "Swedish league")
+    api_url = f"{BASE_URL}/lookuptable.php?l={league_id}"
 
-    # Step 1: Fetch group page for name + standings. Some sites block the first
-    # browser profile; retry with a second one instead of failing immediately.
-    last_err = None
-    for headers in (_HEADERS, _FALLBACK_HEADERS):
-        try:
-            async with session.get(url, headers=headers, timeout=timeout) as resp:
-                if resp.status == 200:
-                    page_html = await resp.text()
-                    break
-                last_err = UpdateFailed(f"fotbollstabeller.nu returned HTTP {resp.status}")
-        except Exception as err:  # noqa: BLE001
-            last_err = err
-            continue
-    else:
-        if last_err is not None:
-            raise UpdateFailed(str(last_err)) from last_err
-        raise UpdateFailed("Unable to fetch group page")
+    try:
+        async with session.get(api_url, headers=_HEADERS, timeout=timeout) as resp:
+            if resp.status != 200:
+                raise UpdateFailed(f"SportsDB returned HTTP {resp.status}")
+            payload = await resp.json()
+    except Exception as err:  # noqa: BLE001
+        raise UpdateFailed(f"Unable to fetch standings from SportsDB: {err}") from err
 
-    group_name = _extract_group_name(page_html)
-    standings = _parse_standings(page_html)
-    if standings:
-        return group_name, standings
+    table = payload.get("table") if isinstance(payload, dict) else None
+    if not table:
+        raise UpdateFailed(f"No standings table found for league {league_id}")
 
-    # Legacy fallback for older fotbollstabeller.nu pages.
-    group_id = _extract_group_id(page_html)
-    if not group_id:
-        raise UpdateFailed("Could not find standings data on the group page")
-
-    ajax_url = f"{BASE_URL}/home/get_group_details/{group_id}"
-    ajax_headers = {**_HEADERS, "X-Requested-With": "XMLHttpRequest"}
-    async with session.get(ajax_url, headers=ajax_headers, timeout=timeout) as resp:
-        if resp.status != 200:
-            raise UpdateFailed(f"AJAX endpoint returned HTTP {resp.status}")
-        ajax_html = await resp.text()
-
-    standings = _parse_standings(ajax_html)
+    standings = _normalize_sportsdb_table(table)
     if not standings:
-        raise UpdateFailed("No standings table found on page")
-    return group_name, standings
+        raise UpdateFailed(f"Could not parse standings for league {league_id}")
+
+    return league_name, standings
 
 
 def _safe_int(row: list[str], idx: int | None) -> int:

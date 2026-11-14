@@ -109,6 +109,30 @@ class ParseStandingsTest(unittest.TestCase):
         self.assertEqual(rows[0]["points"], 58)
         self.assertEqual(rows[1]["goal_difference"], 23)
 
+    def test_sportsdb_league_id_resolution(self):
+        league_id = module._resolve_league_id("allsvenskan")
+        self.assertEqual(league_id, "4347")
+
+        result = module._normalize_sportsdb_table([
+            {
+                "intRank": "1",
+                "strTeam": "Hammarby",
+                "intPlayed": "28",
+                "intWin": "18",
+                "intDraw": "4",
+                "intLoss": "6",
+                "intGoalsFor": "60",
+                "intGoalsAgainst": "23",
+                "intGoalDifference": "37",
+                "intPoints": "58",
+                "strBadge": "https://example.com/logo.png",
+            }
+        ])
+
+        self.assertEqual(result[0]["team"], "Hammarby")
+        self.assertEqual(result[0]["points"], 58)
+        self.assertEqual(result[0]["team_logo"], "https://example.com/logo.png")
+
 
 if __name__ == "__main__":
     unittest.main()
