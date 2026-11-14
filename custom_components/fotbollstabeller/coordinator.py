@@ -32,6 +32,12 @@ _GD_RE = re.compile(r"(\d+)\s*[-–]\s*(\d+)\s*\(\s*([+\-−]?\d+)\s*\)")
 # Extract data-id from group page
 _DATA_ID_RE = re.compile(r'data-id="(\d+)"')
 
+# New page format: pipe-delimited standings rows rendered directly in the page HTML
+_PIPE_STANDINGS_RE = re.compile(
+    r"\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*([+\-−]?\d+)\s*\|\s*(\d+)\s*\|",
+    re.IGNORECASE,
+)
+
 
 # ---------------------------------------------------------------------------
 # HTML parsers
@@ -154,53 +160,93 @@ def _extract_group_id(html: str) -> str | None:
 
 
 def _extract_group_name(html: str) -> str:
-    """Extract the group name from the <h1> tag."""
+    """Extract the group name from the page markup."""
     h1p = _H1Parser()
     h1p.feed(html)
-    return h1p.text.strip()
+    name = h1p.text.strip()
+    if name:
+        return name
+
+    match = re.search(r"<title>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
+    if not match:
+        return ""
+    title = re.sub(r"\s+", " ", match.group(1)).strip()
+    return title.split(" | ")[0].split(" – ")[0].strip()
 
 
 def _parse_standings(html: str) -> list[dict]:
-    """Parse the div-based standings from the AJAX response."""
+    """Parse standings from legacy AJAX markup or the current page-rendered table."""
     tp = _DivTableParser()
     tp.feed(html)
+    if tp.rows:
+        # First row should be headers
+        headers = [h.upper() for h in tp.rows[0]]
+        if "RK" in headers and "TP" in headers:
+            idx: dict[str, int] = {}
+            for key in ("RK", "LAG", "GP", "W", "T", "L", "GD", "TP"):
+                if key in headers:
+                    idx[key] = headers.index(key)
 
-    if not tp.rows:
-        return []
+            standings: list[dict] = []
+            for row in tp.rows[1:]:
+                if not row:
+                    continue
+                try:
+                    pos = int(row[idx["RK"]])
+                except (ValueError, IndexError, KeyError):
+                    continue
 
-    # First row should be headers
-    headers = [h.upper() for h in tp.rows[0]]
-    if "RK" not in headers or "TP" not in headers:
-        return []
+                team = row[idx["LAG"]] if "LAG" in idx and idx["LAG"] < len(row) else ""
+                played = _safe_int(row, idx.get("GP"))
+                won = _safe_int(row, idx.get("W"))
+                draw = _safe_int(row, idx.get("T"))
+                lost = _safe_int(row, idx.get("L"))
+                points = _safe_int(row, idx.get("TP"))
 
-    idx: dict[str, int] = {}
-    for key in ("RK", "LAG", "GP", "W", "T", "L", "GD", "TP"):
-        if key in headers:
-            idx[key] = headers.index(key)
+                gf, ga, gd = 0, 0, 0
+                if "GD" in idx and idx["GD"] < len(row):
+                    m = _GD_RE.search(row[idx["GD"]])
+                    if m:
+                        gf = int(m.group(1))
+                        ga = int(m.group(2))
+                        gd = int(m.group(3).replace("\u2212", "-"))
+
+                standings.append(
+                    {
+                        "position": pos,
+                        "team": team,
+                        "team_short": team,
+                        "team_logo": None,
+                        "played_games": played,
+                        "won": won,
+                        "draw": draw,
+                        "lost": lost,
+                        "goals_for": gf,
+                        "goals_against": ga,
+                        "goal_difference": gd,
+                        "points": points,
+                    }
+                )
+            if standings:
+                return standings
 
     standings: list[dict] = []
-    for row in tp.rows[1:]:
-        if not row:
-            continue
+    for match in _PIPE_STANDINGS_RE.findall(html):
+        pos_txt, team, played_txt, won_txt, draw_txt, lost_txt, gd_txt, points_txt = match
         try:
-            pos = int(row[idx["RK"]])
-        except (ValueError, IndexError, KeyError):
+            pos = int(pos_txt)
+            played = int(played_txt)
+            won = int(won_txt)
+            draw = int(draw_txt)
+            lost = int(lost_txt)
+            points = int(points_txt)
+        except ValueError:
             continue
 
-        team = row[idx["LAG"]] if "LAG" in idx and idx["LAG"] < len(row) else ""
-        played = _safe_int(row, idx.get("GP"))
-        won = _safe_int(row, idx.get("W"))
-        draw = _safe_int(row, idx.get("T"))
-        lost = _safe_int(row, idx.get("L"))
-        points = _safe_int(row, idx.get("TP"))
-
-        gf, ga, gd = 0, 0, 0
-        if "GD" in idx and idx["GD"] < len(row):
-            m = _GD_RE.search(row[idx["GD"]])
-            if m:
-                gf = int(m.group(1))
-                ga = int(m.group(2))
-                gd = int(m.group(3).replace("\u2212", "-"))
+        gd = int(gd_txt.replace("\u2212", "-"))
+        team = team.strip()
+        if not team:
+            continue
 
         standings.append(
             {
@@ -212,8 +258,8 @@ def _parse_standings(html: str) -> list[dict]:
                 "won": won,
                 "draw": draw,
                 "lost": lost,
-                "goals_for": gf,
-                "goals_against": ga,
+                "goals_for": 0,
+                "goals_against": 0,
                 "goal_difference": gd,
                 "points": points,
             }
@@ -243,19 +289,22 @@ async def fetch_standings(
     if not url.startswith("http"):
         url = f"{BASE_URL}/home/group/{url}"
 
-    # Step 1: Fetch group page for name + data-id
+    # Step 1: Fetch group page for name + standings
     async with session.get(url, headers=_HEADERS, timeout=timeout) as resp:
         if resp.status != 200:
             raise UpdateFailed(f"fotbollstabeller.nu returned HTTP {resp.status}")
         page_html = await resp.text()
 
     group_name = _extract_group_name(page_html)
+    standings = _parse_standings(page_html)
+    if standings:
+        return group_name, standings
+
+    # Legacy fallback for older fotbollstabeller.nu pages.
     group_id = _extract_group_id(page_html)
-
     if not group_id:
-        raise UpdateFailed("Could not find data-id on group page")
+        raise UpdateFailed("Could not find standings data on the group page")
 
-    # Step 2: Fetch AJAX standings
     ajax_url = f"{BASE_URL}/home/get_group_details/{group_id}"
     ajax_headers = {**_HEADERS, "X-Requested-With": "XMLHttpRequest"}
     async with session.get(ajax_url, headers=ajax_headers, timeout=timeout) as resp:
@@ -264,6 +313,8 @@ async def fetch_standings(
         ajax_html = await resp.text()
 
     standings = _parse_standings(ajax_html)
+    if not standings:
+        raise UpdateFailed("No standings table found on page")
     return group_name, standings
 
 
