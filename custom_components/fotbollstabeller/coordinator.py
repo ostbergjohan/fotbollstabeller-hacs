@@ -23,7 +23,22 @@ _HEADERS = {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept": "text/html,application/xhtml+xml,*/*",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "sv-SE,sv;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Referer": "https://www.fotbollstabeller.nu/",
+    "DNT": "1",
+    "Upgrade-Insecure-Requests": "1",
+    "Connection": "keep-alive",
+}
+
+_FALLBACK_HEADERS = {
+    **_HEADERS,
+    "User-Agent": (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+    ),
+    "Referer": "https://www.fotbollstabeller.nu/allsvenskan",
 }
 
 # GD column: "19-7 (12)" or "0-16 (−16)"
@@ -289,11 +304,23 @@ async def fetch_standings(
     if not url.startswith("http"):
         url = f"{BASE_URL}/home/group/{url}"
 
-    # Step 1: Fetch group page for name + standings
-    async with session.get(url, headers=_HEADERS, timeout=timeout) as resp:
-        if resp.status != 200:
-            raise UpdateFailed(f"fotbollstabeller.nu returned HTTP {resp.status}")
-        page_html = await resp.text()
+    # Step 1: Fetch group page for name + standings. Some sites block the first
+    # browser profile; retry with a second one instead of failing immediately.
+    last_err = None
+    for headers in (_HEADERS, _FALLBACK_HEADERS):
+        try:
+            async with session.get(url, headers=headers, timeout=timeout) as resp:
+                if resp.status == 200:
+                    page_html = await resp.text()
+                    break
+                last_err = UpdateFailed(f"fotbollstabeller.nu returned HTTP {resp.status}")
+        except Exception as err:  # noqa: BLE001
+            last_err = err
+            continue
+    else:
+        if last_err is not None:
+            raise UpdateFailed(str(last_err)) from last_err
+        raise UpdateFailed("Unable to fetch group page")
 
     group_name = _extract_group_name(page_html)
     standings = _parse_standings(page_html)
