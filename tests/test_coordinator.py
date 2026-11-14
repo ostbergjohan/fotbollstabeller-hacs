@@ -1,3 +1,4 @@
+import asyncio
 import importlib.util
 import os
 import sys
@@ -132,6 +133,42 @@ class ParseStandingsTest(unittest.TestCase):
         self.assertEqual(result[0]["team"], "Hammarby")
         self.assertEqual(result[0]["points"], 58)
         self.assertEqual(result[0]["team_logo"], "https://example.com/logo.png")
+
+    def test_fetch_standings_accepts_api_key(self):
+        class DummyResponse:
+            status = 200
+            async def json(self):
+                return {"table": [{
+                    "intRank": "1",
+                    "strTeam": "Hammarby",
+                    "intPlayed": "28",
+                    "intWin": "18",
+                    "intDraw": "4",
+                    "intLoss": "6",
+                    "intGoalsFor": "60",
+                    "intGoalsAgainst": "23",
+                    "intGoalDifference": "37",
+                    "intPoints": "58",
+                    "strBadge": "https://example.com/logo.png",
+                }]}
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        class DummySession:
+            def get(self, url, headers=None, timeout=None):
+                self.url = url
+                self.headers = headers
+                return DummyResponse()
+
+        session = DummySession()
+        name, rows = asyncio.run(module.fetch_standings(session, "allsvenskan", api_key="custom123"))
+        self.assertEqual(name, "Swedish Allsvenskan")
+        self.assertEqual(rows[0]["team"], "Hammarby")
+        self.assertIn("custom123", session.url)
 
 
 if __name__ == "__main__":

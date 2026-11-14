@@ -13,7 +13,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
 
-from .const import DOMAIN, BASE_URL, DEFAULT_SCAN_INTERVAL
+from .const import BASE_URL, DEFAULT_API_KEY, DEFAULT_SCAN_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 _STORAGE_VERSION = 2
@@ -377,6 +377,7 @@ async def fetch_standings(
     session: aiohttp.ClientSession,
     group_url: str,
     timeout: aiohttp.ClientTimeout | None = None,
+    api_key: str | None = None,
 ) -> tuple[str, list[dict]]:
     """Fetch standings from the SportsDB API using a legacy league slug/id."""
     if timeout is None:
@@ -384,7 +385,8 @@ async def fetch_standings(
 
     league_id = _resolve_league_id(group_url)
     league_name = _SPORTSDB_LEAGUE_NAMES.get(league_id, "Swedish league")
-    api_url = f"{BASE_URL}/lookuptable.php?l={league_id}"
+    api_key = (api_key or DEFAULT_API_KEY).strip() or DEFAULT_API_KEY
+    api_url = f"{BASE_URL}/{api_key}/lookuptable.php?l={league_id}"
 
     try:
         async with session.get(api_url, headers=_HEADERS, timeout=timeout) as resp:
